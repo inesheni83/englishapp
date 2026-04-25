@@ -1,23 +1,82 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Home, MessageCircle, BookOpen, User, Play, Mic, Send, BookMarked, BrainCircuit, Mic2, Star, Volume2 } from 'lucide-react';
 import './index.css';
 import { dailyContent, dialogues, discussionExpressions } from './data.js';
+import { supabase } from './supabaseClient';
 
 function App() {
+  const [session, setSession] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
   const [activeDay, setActiveDay] = useState(1);
   const [totalDays, setTotalDays] = useState(7);
   const [generatedContent, setGeneratedContent] = useState({});
   const [isGenerating, setIsGenerating] = useState(false);
 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (session?.user) {
+      supabase.from('user_progress').select('*').eq('user_id', session.user.id).single()
+        .then(({ data, error }) => {
+          if (data) {
+            if (data.active_day) setActiveDay(data.active_day);
+            if (data.generated_content) {
+              setGeneratedContent(data.generated_content);
+              const maxDay = Math.max(7, ...Object.keys(data.generated_content).map(Number));
+              setTotalDays(maxDay);
+            }
+          }
+        });
+    }
+  }, [session]);
+
+  const updateProgress = async (newActiveDay, newGeneratedContent) => {
+    if (!session?.user) return;
+    try {
+      const { data, error } = await supabase.from('user_progress').select('id').eq('user_id', session.user.id).single();
+      
+      if (data) {
+        await supabase.from('user_progress').update({ 
+          active_day: newActiveDay,
+          generated_content: newGeneratedContent,
+          updated_at: new Date()
+        }).eq('user_id', session.user.id);
+      } else {
+        await supabase.from('user_progress').insert({ 
+          user_id: session.user.id, 
+          active_day: newActiveDay,
+          generated_content: newGeneratedContent
+        });
+      }
+    } catch (err) {
+      console.error("Erreur lors de la sauvegarde :", err);
+    }
+  };
+
+  const handleSetActiveDay = (day) => {
+    setActiveDay(day);
+    updateProgress(day, generatedContent);
+  };
+
   const appContent = { ...dailyContent, ...generatedContent };
 
-  const generateNextWeek = async () => {
-    if (!import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY.includes('votre_cle')) {
-      alert("Veuillez configurer votre clé VITE_GEMINI_API_KEY dans le fichier .env pour générer du contenu avec l'IA.");
-      return;
-    }
+  if (!session) {
+    return <AuthView />;
+  }
 
+  const generateNextWeek = async () => {
     setIsGenerating(true);
     try {
       const prompt = `Génère 7 jours supplémentaires de programme d'immersion en anglais pour un ingénieur web.
@@ -35,7 +94,7 @@ function App() {
       }
       Assure-toi que chaque jour a exactement 15 mots dans 'vocab' et 3 ou 4 objets dans 'grammarRules'.`;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`, {
+      const response = await fetch('/api/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -48,25 +107,31 @@ function App() {
       const data = await response.json();
       if (data.candidates && data.candidates.length > 0) {
         const text = data.candidates[0].content.parts[0].text;
-        const newDays = JSON.parse(text);
-        setGeneratedContent(prev => ({ ...prev, ...newDays }));
-        setTotalDays(prev => prev + 7);
-        alert("7 nouveaux jours ont été générés avec succès !");
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const newContent = JSON.parse(jsonMatch[0]);
+          const updatedContent = { ...generatedContent, ...newContent };
+          setGeneratedContent(updatedContent);
+          setTotalDays(totalDays + 7);
+          updateProgress(activeDay, updatedContent);
+        }
       }
     } catch (error) {
-      console.error(error);
-      alert("Une erreur est survenue lors de la génération. Vérifiez la console.");
-    } finally {
-      setIsGenerating(false);
+      console.error("Erreur lors de la génération:", error);
+      alert("Une erreur est survenue lors de la génération. Assurez-vous d'utiliser `vercel dev` pour tester les API localement.");
     }
+    setIsGenerating(false);
   };
 
   return (
-    <>
+    <div className="app-container">
       <header className="app-header">
-        <div className="header-title">
-          <BrainCircuit size={28} color="var(--primary)" />
-          Fluent
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="logo-icon">F</div>
+          <div>
+            <h1 style={{ fontSize: '1.2rem', margin: 0, color: 'var(--text-main)' }}>Fluent</h1>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tech English Coach</span>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           <div style={{ background: 'var(--accent-light)', color: 'var(--accent)', padding: '4px 12px', borderRadius: '16px', fontWeight: 'bold', fontSize: '0.85rem' }}>
@@ -76,7 +141,7 @@ function App() {
       </header>
 
       <main className="container">
-        {activeTab === 'home' && <HomeView activeDay={activeDay} setActiveDay={setActiveDay} setActiveTab={setActiveTab} totalDays={totalDays} generateNextWeek={generateNextWeek} isGenerating={isGenerating} />}
+        {activeTab === 'home' && <HomeView activeDay={activeDay} setActiveDay={handleSetActiveDay} setActiveTab={setActiveTab} totalDays={totalDays} generateNextWeek={generateNextWeek} isGenerating={isGenerating} />}
         {activeTab === 'coach' && <CoachView />}
         {activeTab === 'learn' && <LearnView activeDay={activeDay} appContent={appContent} />}
         {activeTab === 'dialogues' && <DialoguesView />}
@@ -102,7 +167,7 @@ function App() {
           <span>Profile</span>
         </button>
       </nav>
-    </>
+    </div>
   );
 }
 
@@ -199,12 +264,11 @@ function HomeView({ activeDay, setActiveDay, setActiveTab, totalDays, generateNe
 
 function CoachView() {
   const [messages, setMessages] = useState([
-    { id: 1, type: 'bot', text: "Hello! I'm your AI English Coach. Ready for our 3-minute conversation practice today? Let's talk about your current web project and the tech stack you're using." }
+    { id: 1, type: 'bot', response: "Hello! I'm your AI English Coach. Ready for our 3-minute conversation practice today? Let's talk about your current web project and the tech stack you're using.", feedback: null }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [apiKeyMissing, setApiKeyMissing] = useState(!import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY.includes('votre_cle'));
 
   const speak = (text) => {
     if ('speechSynthesis' in window) {
@@ -246,43 +310,48 @@ function CoachView() {
     setInput('');
     setLoading(true);
 
-    if (apiKeyMissing) {
-      setTimeout(() => {
-        setMessages(prev => [...prev, { id: Date.now(), type: 'bot', text: "Veuillez ajouter votre clé API Gemini dans le fichier .env (VITE_GEMINI_API_KEY) et redémarrer le serveur pour que je puisse vous répondre." }]);
-        setLoading(false);
-      }, 1000);
-      return;
-    }
-
     try {
       const history = messages.map(m => ({
         role: m.type === 'bot' ? 'model' : 'user',
-        parts: [{ text: m.text }]
+        parts: [{ text: m.type === 'bot' ? m.response : m.text }]
       }));
       history.push({ role: 'user', parts: [{ text: userText }] });
 
-      const systemInstruction = "Tu es mon coach d'anglais pour m'aider à atteindre la maîtrise de la langue. Je suis un Ingénieur Web (Web Engineer). Nos discussions doivent tourner autour de l'ingénierie logicielle, du développement web, des projets tech, etc. Adopte un style proche d'une vraie conversation, et non celui d'un manuel scolaire. Tu me parles en anglais pour que je m'entraîne. Fais des phrases courtes et pose-moi des questions pertinentes sur mon travail tech pour me faire parler.";
+      const systemInstruction = `Tu es mon coach d'anglais pour m'aider à atteindre la maîtrise de la langue. Je suis un Ingénieur Web (Web Engineer). 
+      Analyse ce que je viens de dire pour corriger ma grammaire et mon vocabulaire.
+      Retourne UNIQUEMENT un objet JSON avec ce format exact :
+      {
+        "feedback": "L'explication en français de mes erreurs de grammaire ou de vocabulaire. Si c'est parfait ou s'il n'y a pas d'erreur majeure, retourne exactement la chaîne 'Perfect!'.",
+        "response": "Ta réponse en anglais pour continuer la conversation tech."
+      }`;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`, {
+      const response = await fetch('/api/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemInstruction }] },
           contents: history,
+          generationConfig: { responseMimeType: 'application/json' }
         })
       });
 
       const data = await response.json();
       if (data.candidates && data.candidates.length > 0) {
-        const botResponse = data.candidates[0].content.parts[0].text;
-        setMessages(prev => [...prev, { id: Date.now(), type: 'bot', text: botResponse }]);
-        speak(botResponse);
+        const text = data.candidates[0].content.parts[0].text;
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          setMessages(prev => [...prev, { id: Date.now(), type: 'bot', response: parsed.response, feedback: parsed.feedback }]);
+          speak(parsed.response);
+        } else {
+          throw new Error("Format JSON invalide");
+        }
       } else {
         throw new Error("Erreur de réponse");
       }
     } catch (error) {
       console.error(error);
-      setMessages(prev => [...prev, { id: Date.now(), type: 'bot', text: "Sorry, I had a connection issue. Can you repeat?" }]);
+      setMessages(prev => [...prev, { id: Date.now(), type: 'bot', response: "Sorry, I had a connection issue. Can you repeat?", feedback: null }]);
     } finally {
       setLoading(false);
     }
@@ -290,30 +359,39 @@ function CoachView() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 160px)', margin: '-20px' }}>
-      {apiKeyMissing && (
-        <div style={{ background: '#FEF2F2', color: '#B91C1C', padding: '12px 20px', fontSize: '0.85rem', borderBottom: '1px solid #FECACA' }}>
-          <strong>Attention:</strong> Clé API manquante. Ajoutez VITE_GEMINI_API_KEY dans le .env pour activer l'IA.
-        </div>
-      )}
-      <div className="chat-messages">
+      <div className="chat-messages" style={{ display: 'flex', flexDirection: 'column', padding: '20px', overflowY: 'auto', flex: 1, gap: '16px' }}>
         {messages.map(msg => (
-          <div key={msg.id} className={`message ${msg.type}`}>
-            {msg.text}
+          <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.type === 'user' ? 'flex-end' : 'flex-start' }}>
+            {msg.type === 'bot' && msg.feedback && msg.feedback !== 'Perfect!' && (
+              <div style={{ background: '#FEF2F2', borderLeft: '4px solid #EF4444', padding: '8px 12px', fontSize: '0.85rem', color: '#991B1B', borderRadius: '4px', marginBottom: '8px', maxWidth: '85%' }}>
+                <strong style={{ display: 'block', marginBottom: '4px' }}>👩‍🏫 Coach Feedback:</strong>
+                {msg.feedback}
+              </div>
+            )}
+            {msg.type === 'bot' && msg.feedback === 'Perfect!' && (
+              <div style={{ background: '#ECFDF5', borderLeft: '4px solid #10B981', padding: '8px 12px', fontSize: '0.85rem', color: '#065F46', borderRadius: '4px', marginBottom: '8px', maxWidth: '85%' }}>
+                <strong style={{ display: 'block' }}>👩‍🏫 Coach Feedback: Perfect grammar! 🌟</strong>
+              </div>
+            )}
+            <div className={`message ${msg.type}`} style={{ margin: 0, maxWidth: '85%' }}>
+              {msg.type === 'user' ? msg.text : msg.response}
+            </div>
           </div>
         ))}
-        {loading && <div className="message bot">Thinking...</div>}
+        {loading && <div className="message bot" style={{ maxWidth: '85%', margin: 0 }}>Thinking...</div>}
       </div>
       <div className="chat-input-area">
         <button 
           style={{ background: isRecording ? '#FEE2E2' : 'none', border: 'none', color: isRecording ? '#EF4444' : 'var(--text-muted)', cursor: 'pointer', padding: '8px', borderRadius: '50%', transition: 'all 0.2s' }}
           onClick={startRecording}
+          title="Maintenez ou cliquez pour parler"
         >
           <Mic size={24} />
         </button>
         <input 
           type="text" 
           className="chat-input" 
-          placeholder="Type a message..." 
+          placeholder="Type or speak a message..." 
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && handleSend()}
@@ -428,6 +506,10 @@ function LearnView({ activeDay, appContent }) {
 }
 
 function ProfileView() {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
   return (
     <div>
       <h1 style={{ marginBottom: '24px' }}>Your Progress</h1>
@@ -456,6 +538,14 @@ function ProfileView() {
       </div>
 
       <button className="btn btn-primary" style={{ width: '100%', marginTop: '24px' }}>End of Day Test</button>
+      
+      <button 
+        onClick={handleLogout}
+        className="btn btn-outline" 
+        style={{ width: '100%', marginTop: '16px', borderColor: 'var(--danger-color, #ef4444)', color: 'var(--danger-color, #ef4444)' }}
+      >
+        Se déconnecter
+      </button>
     </div>
   );
 }
@@ -688,6 +778,79 @@ function ExpressionsView() {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function AuthView() {
+  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        alert('Inscription réussie ! Vérifiez vos emails pour confirmer votre compte (si activé par défaut sur Supabase), ou connectez-vous.');
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      }
+    } catch (error) {
+      alert(error.error_description || error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', background: 'var(--bg-color)' }}>
+      <div className="card" style={{ width: '100%', maxWidth: '400px', padding: '30px' }}>
+        <h1 style={{ textAlign: 'center', color: 'var(--primary)', marginBottom: '8px', fontSize: '2.5rem', fontWeight: 'bold' }}>Fluent</h1>
+        <p style={{ textAlign: 'center', color: 'var(--text-muted)', marginBottom: '32px' }}>AI English Coach for Web Engineers</p>
+        
+        <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.95rem', fontWeight: '500' }}>Adresse Email</label>
+            <input 
+              type="email" 
+              value={email} 
+              onChange={(e) => setEmail(e.target.value)} 
+              required 
+              style={{ width: '100%', padding: '14px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '1rem', boxSizing: 'border-box' }} 
+              placeholder="votre@email.com"
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.95rem', fontWeight: '500' }}>Mot de passe</label>
+            <input 
+              type="password" 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)} 
+              required 
+              style={{ width: '100%', padding: '14px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '1rem', boxSizing: 'border-box' }} 
+              placeholder="••••••••"
+            />
+          </div>
+          <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop: '8px', padding: '14px', fontSize: '1rem', width: '100%' }}>
+            {loading ? 'Chargement...' : (isSignUp ? "Créer un compte" : "Se connecter")}
+          </button>
+        </form>
+        
+        <div style={{ textAlign: 'center', marginTop: '32px', fontSize: '0.95rem', color: 'var(--text-muted)' }}>
+          {isSignUp ? "Vous avez déjà un compte ?" : "Pas encore de compte ?"}
+          <button 
+            onClick={() => setIsSignUp(!isSignUp)} 
+            style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 'bold', marginLeft: '8px', cursor: 'pointer', fontSize: '0.95rem' }}
+          >
+            {isSignUp ? "Se connecter" : "S'inscrire"}
+          </button>
+        </div>
       </div>
     </div>
   );
