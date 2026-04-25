@@ -321,7 +321,7 @@ function CoachView() {
       Analyse ce que je viens de dire pour corriger ma grammaire et mon vocabulaire.
       Retourne UNIQUEMENT un objet JSON avec ce format exact :
       {
-        "feedback": "L'explication en français de mes erreurs, SUIVIE OBLIGATOIREMENT d'une proposition complète corrigeant ma phrase (ex: 'Vous auriez dû dire : ...'). Si c'est parfait ou s'il n'y a pas d'erreur majeure, retourne exactement la chaîne 'Perfect!'.",
+        "feedback": "L'explication en français de mes erreurs, SUIVIE OBLIGATOIREMENT d'une proposition complète corrigeant ma phrase. Tu DOIS encadrer cette proposition complète avec des balises HTML <b> (ex: '<b>Vous auriez dû dire : I am working on it</b>'). Si c'est parfait ou s'il n'y a pas d'erreur majeure, retourne exactement la chaîne 'Perfect!'.",
         "response": "Ta réponse en anglais pour continuer la conversation tech."
       }`;
 
@@ -365,7 +365,7 @@ function CoachView() {
             {msg.type === 'bot' && msg.feedback && msg.feedback !== 'Perfect!' && (
               <div style={{ background: '#FEF2F2', borderLeft: '4px solid #EF4444', padding: '8px 12px', fontSize: '0.85rem', color: '#991B1B', borderRadius: '4px', marginBottom: '8px', maxWidth: '85%' }}>
                 <strong style={{ display: 'block', marginBottom: '4px' }}>👩‍🏫 Coach Feedback:</strong>
-                {msg.feedback}
+                <span dangerouslySetInnerHTML={{ __html: msg.feedback }} />
               </div>
             )}
             {msg.type === 'bot' && msg.feedback === 'Perfect!' && (
