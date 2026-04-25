@@ -321,7 +321,7 @@ function CoachView() {
       Analyse ce que je viens de dire pour corriger ma grammaire et mon vocabulaire.
       Retourne UNIQUEMENT un objet JSON avec ce format exact :
       {
-        "feedback": "L'explication en français de mes erreurs de grammaire ou de vocabulaire. Si c'est parfait ou s'il n'y a pas d'erreur majeure, retourne exactement la chaîne 'Perfect!'.",
+        "feedback": "L'explication en français de mes erreurs, SUIVIE OBLIGATOIREMENT d'une proposition complète corrigeant ma phrase (ex: 'Vous auriez dû dire : ...'). Si c'est parfait ou s'il n'y a pas d'erreur majeure, retourne exactement la chaîne 'Perfect!'.",
         "response": "Ta réponse en anglais pour continuer la conversation tech."
       }`;
 
