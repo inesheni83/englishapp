@@ -146,7 +146,7 @@ function App() {
         {activeTab === 'learn' && <LearnView activeDay={activeDay} appContent={appContent} />}
         {activeTab === 'dialogues' && <DialoguesView />}
         {activeTab === 'expressions' && <ExpressionsView />}
-        {activeTab === 'profile' && <ProfileView />}
+        {activeTab === 'profile' && <ProfileView activeDay={activeDay} session={session} />}
       </main>
 
       <nav className="bottom-nav">
@@ -505,10 +505,15 @@ function LearnView({ activeDay, appContent }) {
   );
 }
 
-function ProfileView() {
+function ProfileView({ activeDay, session }) {
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
+
+  const userEmail = session?.user?.email || "User";
+  const initials = userEmail.substring(0, 2).toUpperCase();
+  const wordsLearned = activeDay * 15;
+  const grammarRules = activeDay * 5;
 
   return (
     <div>
@@ -516,10 +521,10 @@ function ProfileView() {
       
       <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
         <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 'bold' }}>
-          JD
+          {initials}
         </div>
-        <div>
-          <h2 style={{ fontSize: '1.3rem', marginBottom: '4px' }}>John Doe</h2>
+        <div style={{ overflow: 'hidden' }}>
+          <h2 style={{ fontSize: '1.2rem', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail}</h2>
           <p>Intermediate Level (B1)</p>
         </div>
       </div>
@@ -528,12 +533,20 @@ function ProfileView() {
       
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
         <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--primary)' }}>3</div>
+          <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--primary)' }}>{activeDay}</div>
           <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Day Streak</div>
         </div>
         <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--accent)' }}>45</div>
+          <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--accent)' }}>{wordsLearned}</div>
           <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Words Learned</div>
+        </div>
+        <div className="card" style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#10B981' }}>{grammarRules}</div>
+          <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Grammar Rules</div>
+        </div>
+        <div className="card" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#F59E0B' }}>Level Up</div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>{Math.max(0, 7 - activeDay)} days left</div>
         </div>
       </div>
 
