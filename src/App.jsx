@@ -279,11 +279,18 @@ function HomeView({ activeDay, setActiveDay, setActiveTab, totalDays, generateNe
         })}
         <div 
           className="day-bubble" 
-          style={{ background: 'var(--accent-light)', borderColor: 'var(--accent)', color: 'var(--accent)' }}
-          onClick={generateNextWeek}
-          title="Generate 7 more days with AI"
+          style={{ 
+            background: 'var(--accent-light)', 
+            borderColor: 'var(--accent)', 
+            color: 'var(--accent)',
+            opacity: (unlockedDay > totalDays) ? 1 : 0.5,
+            cursor: (unlockedDay > totalDays) ? 'pointer' : 'not-allowed'
+          }}
+          onClick={() => (unlockedDay > totalDays) && generateNextWeek()}
+          title={unlockedDay > totalDays ? "Generate 7 more days with AI" : "Complete all current days to unlock more"}
         >
           {isGenerating ? <div style={{ fontSize: '0.8rem' }}>...</div> : <span style={{ fontSize: '1.2rem' }}>+7</span>}
+          {!(unlockedDay > totalDays) && <span style={{position: 'absolute', top: '-6px', right: '-6px', fontSize: '1rem'}}>🔒</span>}
         </div>
       </div>
 
