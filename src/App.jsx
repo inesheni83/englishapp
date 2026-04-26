@@ -649,32 +649,75 @@ function LearnView({ activeDay, appContent, setActiveTab }) {
       </div>
 
       <div className="card">
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Workplace Expressions</h2>
-        {dayExpressions.map((exp, idx) => (
-          <div key={idx} style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '1.05rem', marginBottom: '4px' }}>
-                  {exp.phrase || exp.expression}
-                </div>
-                <div style={{ fontSize: '0.9rem', color: 'var(--primary)', marginBottom: '4px' }}>
-                  {exp.meaning || exp.context}
-                </div>
-                {(exp.context || exp.translation) && (
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    {exp.translation || exp.context}
+        <h2 style={{ fontSize: '1.2rem', marginBottom: '4px' }}>💼 Workplace Expressions</h2>
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>10 must-know expressions for your work day.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {dayExpressions.map((exp, idx) => {
+            const phrase = exp.phrase || exp.expression;
+            const meaning = exp.meaning || exp.description || exp.context;
+            const exampleRaw = exp.example || `"${phrase}"` ;
+            const translation = exp.translation;
+            const color = exp.color || '#4F46E5';
+            const category = exp.category;
+            // Highlight the phrase in the example sentence
+            const exampleHighlighted = exampleRaw.includes(phrase)
+              ? exampleRaw.replace(phrase, `<strong style="color:${color}">${phrase}</strong>`)
+              : `<strong style="color:${color}">${phrase}</strong> — ${exampleRaw}`;
+
+            return (
+              <div key={idx} style={{
+                background: `${color}10`,
+                border: `1.5px solid ${color}33`,
+                borderLeft: `4px solid ${color}`,
+                borderRadius: '12px',
+                padding: '14px 16px',
+                position: 'relative'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                  <div style={{ flex: 1 }}>
+                    {category && (
+                      <span style={{
+                        display: 'inline-block',
+                        fontSize: '0.7rem',
+                        fontWeight: '700',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                        color: color,
+                        background: `${color}18`,
+                        padding: '2px 8px',
+                        borderRadius: '20px',
+                        marginBottom: '8px'
+                      }}>{category}</span>
+                    )}
+                    <div style={{ fontWeight: '700', fontSize: '1.05rem', color: color, marginBottom: '6px' }}>
+                      {phrase}
+                    </div>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-main)', marginBottom: '6px', lineHeight: '1.5' }}
+                      dangerouslySetInnerHTML={{ __html: `🗣️ ${exampleHighlighted}` }}
+                    />
+                    {translation && (
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                        {translation}
+                      </div>
+                    )}
+                    {meaning && (
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        💡 {meaning}
+                      </div>
+                    )}
                   </div>
-                )}
+                  <button
+                    onClick={() => speakExample(exampleRaw)}
+                    style={{ background: `${color}20`, border: 'none', color: color, cursor: 'pointer', padding: '8px', borderRadius: '50%', flexShrink: 0 }}
+                    title="Listen"
+                  >
+                    <Volume2 size={16} />
+                  </button>
+                </div>
               </div>
-              <button 
-                onClick={() => speakExample(exp.phrase || exp.expression)}
-                style={{ background: 'var(--accent-light)', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: '8px', borderRadius: '50%', flexShrink: 0 }}
-              >
-                <Volume2 size={16} />
-              </button>
-            </div>
-          </div>
-        ))}
+            );
+          })}
+        </div>
         <div style={{ marginTop: '24px', padding: '16px', background: expressionsDone ? '#ECFDF5' : '#F1F5F9', borderRadius: '8px', border: `1px solid ${expressionsDone ? '#10B981' : '#E2E8F0'}`, display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => setExpressionsDone(!expressionsDone)}>
           <input type="checkbox" checked={expressionsDone} readOnly style={{ transform: 'scale(1.5)' }} />
           <span style={{ fontWeight: '600', color: expressionsDone ? '#065F46' : '#475569' }}>J'ai appris ces expressions</span>
