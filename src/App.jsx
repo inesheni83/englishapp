@@ -14,6 +14,7 @@ function App() {
   const [userLevel, setUserLevel] = useState("Not evaluated");
   const [onboardingStep, setOnboardingStep] = useState('welcome');
   const [tempLevel, setTempLevel] = useState(null);
+  const [unlockedDay, setUnlockedDay] = useState(1);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -39,6 +40,11 @@ function App() {
               setGeneratedContent(data.generated_content);
               if (data.generated_content.userLevel) {
                 setUserLevel(data.generated_content.userLevel);
+              }
+              if (data.generated_content.unlockedDay) {
+                setUnlockedDay(data.generated_content.unlockedDay);
+              } else {
+                setUnlockedDay(data.active_day || 1);
               }
               const validKeys = Object.keys(data.generated_content).map(Number).filter(n => !isNaN(n));
               const maxDay = validKeys.length > 0 ? Math.max(7, ...validKeys) : 7;
@@ -197,13 +203,23 @@ function App() {
       </header>
 
       <main className="container">
-        {activeTab === 'home' && <HomeView activeDay={activeDay} setActiveDay={handleSetActiveDay} setActiveTab={setActiveTab} totalDays={totalDays} generateNextWeek={generateNextWeek} isGenerating={isGenerating} />}
+        {activeTab === 'home' && <HomeView activeDay={activeDay} setActiveDay={handleSetActiveDay} setActiveTab={setActiveTab} totalDays={totalDays} generateNextWeek={generateNextWeek} isGenerating={isGenerating} unlockedDay={unlockedDay} />}
         {activeTab === 'coach' && <CoachView />}
         {activeTab === 'learn' && <LearnView activeDay={activeDay} appContent={appContent} setActiveTab={setActiveTab} />}
         {activeTab === 'dialogues' && <DialoguesView />}
         {activeTab === 'expressions' && <ExpressionsView />}
         {activeTab === 'profile' && <ProfileView activeDay={activeDay} session={session} setActiveTab={setActiveTab} userLevel={userLevel} />}
-        {activeTab === 'test' && <TestView activeDay={activeDay} appContent={appContent} onComplete={() => setActiveTab('profile')} />}
+        {activeTab === 'test' && <TestView activeDay={activeDay} appContent={appContent} onComplete={(success) => {
+          if (success && activeDay === unlockedDay) {
+            const nextDay = activeDay + 1;
+            setUnlockedDay(nextDay);
+            const updatedContent = { ...generatedContent, unlockedDay: nextDay };
+            setGeneratedContent(updatedContent);
+            updateProgress(nextDay, updatedContent);
+            setActiveDay(nextDay);
+          }
+          setActiveTab('profile');
+        }} />}
         {activeTab === 'placement' && <PlacementTestView onComplete={handleUpdateLevel} />}
       </main>
 
@@ -229,7 +245,7 @@ function App() {
   );
 }
 
-function HomeView({ activeDay, setActiveDay, setActiveTab, totalDays, generateNextWeek, isGenerating }) {
+function HomeView({ activeDay, setActiveDay, setActiveTab, totalDays, generateNextWeek, isGenerating, unlockedDay }) {
   const daysArray = Array.from({ length: totalDays }, (_, i) => i + 1);
 
   return (
@@ -238,16 +254,29 @@ function HomeView({ activeDay, setActiveDay, setActiveTab, totalDays, generateNe
       <p style={{ marginBottom: '24px' }}>Complete your daily tasks to achieve fluency.</p>
 
       <div className="day-selector">
-        {daysArray.map((day) => (
-          <div 
-            key={day} 
-            className={`day-bubble ${activeDay === day ? 'active' : ''}`}
-            onClick={() => setActiveDay(day)}
-          >
-            <span>Day</span>
-            <span>{day}</span>
-          </div>
-        ))}
+        {daysArray.map((day) => {
+          const isUnlocked = day <= unlockedDay;
+          const isCompleted = day < unlockedDay;
+          return (
+            <div 
+              key={day} 
+              className={`day-bubble ${activeDay === day ? 'active' : ''}`}
+              onClick={() => isUnlocked && setActiveDay(day)}
+              style={{
+                opacity: isUnlocked ? 1 : 0.5,
+                cursor: isUnlocked ? 'pointer' : 'not-allowed',
+                background: isCompleted ? '#10B981' : (activeDay === day ? 'var(--primary)' : 'white'),
+                color: isCompleted ? 'white' : (activeDay === day ? 'white' : 'var(--text-main)'),
+                borderColor: isCompleted ? '#10B981' : (activeDay === day ? 'var(--primary)' : 'var(--border-color)')
+              }}
+            >
+              <span>Day</span>
+              <span>{day}</span>
+              {isCompleted && <span style={{position: 'absolute', top: '-6px', right: '-6px', fontSize: '1rem'}}>✅</span>}
+              {!isUnlocked && <span style={{position: 'absolute', top: '-6px', right: '-6px', fontSize: '1rem'}}>🔒</span>}
+            </div>
+          );
+        })}
         <div 
           className="day-bubble" 
           style={{ background: 'var(--accent-light)', borderColor: 'var(--accent)', color: 'var(--accent)' }}
@@ -763,18 +792,19 @@ function TestView({ activeDay, appContent, onComplete }) {
         <h1 style={{ fontSize: '4rem', marginBottom: '16px' }}>💔</h1>
         <h2>Game Over!</h2>
         <p style={{ margin: '16px 0', fontSize: '1.2rem' }}>You made 3 mistakes. Try again later!</p>
-        <button className="btn btn-primary" onClick={onComplete} style={{ width: '100%', marginTop: '24px' }}>Back to Profile</button>
+        <button className="btn btn-primary" onClick={() => onComplete(false)} style={{ width: '100%', marginTop: '24px' }}>Back to Profile</button>
       </div>
     );
   }
 
   if (finished) {
+    const success = score >= 8;
     return (
       <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-        <h1 style={{ fontSize: '4rem', marginBottom: '16px' }}>{score >= 8 ? '🏆' : '👏'}</h1>
-        <h2>Quiz Completed!</h2>
+        <h1 style={{ fontSize: '4rem', marginBottom: '16px' }}>{success ? '🏆' : '👏'}</h1>
+        <h2>{success ? 'Quiz Completed & Passed!' : 'Quiz Finished (Need 8/10 to pass)'}</h2>
         <p style={{ margin: '16px 0', fontSize: '1.2rem' }}>Your score: <strong style={{ color: 'var(--primary)' }}>{score} / {questions.length}</strong></p>
-        <button className="btn btn-primary" onClick={onComplete} style={{ width: '100%', marginTop: '24px' }}>Back to Profile</button>
+        <button className="btn btn-primary" onClick={() => onComplete(success)} style={{ width: '100%', marginTop: '24px' }}>Continue</button>
       </div>
     );
   }
