@@ -1769,12 +1769,42 @@ function InterviewView({ userLevel, session }) {
   const [currentAnswer, setCurrentAnswer] = useState('');
   const [feedback, setFeedback] = useState(null);
   const [openIdx, setOpenIdx] = useState(null);
+  const [historyList, setHistoryList] = useState([]);
+  const [isFetchingHistory, setIsFetchingHistory] = useState(false);
 
   const levelBand = (() => {
     const base = userLevel?.split(' ')?.[0] || 'B1';
     const map = { A1: 'A1/A2', A2: 'A1/A2', B1: 'B1/B2', B2: 'B1/B2', C1: 'C1/C2', C2: 'C1/C2' };
     return map[base] || 'B1/B2';
   })();
+
+  const fetchHistory = async () => {
+    if (!session?.user) return;
+    setStage('history');
+    setIsFetchingHistory(true);
+    try {
+      const { data, error } = await supabase
+        .from('interviews')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false });
+      
+      if (data) setHistoryList(data);
+    } catch (err) {
+      console.error("Error fetching history:", err);
+    }
+    setIsFetchingHistory(false);
+  };
+
+  const loadFromHistory = (item) => {
+    setQuestions(item.questions);
+    setAnswers(item.answers);
+    setFeedback(item.feedback);
+    setJobTitle(item.job_title);
+    setCompany(item.company);
+    setInterviewType(item.interview_type);
+    setStage('feedback');
+  };
 
   const callGemini = async (prompt) => {
     const res = await fetch('/api/gemini', {
@@ -1999,9 +2029,17 @@ function InterviewView({ userLevel, session }) {
           onClick={generateInterview}
           disabled={!jobTitle.trim() || !company.trim()}
           className="btn btn-primary"
-          style={{ width: '100%', padding: '16px', fontSize: '1rem', opacity: (!jobTitle.trim() || !company.trim()) ? 0.5 : 1, cursor: (!jobTitle.trim() || !company.trim()) ? 'not-allowed' : 'pointer' }}
+          style={{ width: '100%', padding: '16px', fontSize: '1rem', opacity: (!jobTitle.trim() || !company.trim()) ? 0.5 : 1, cursor: (!jobTitle.trim() || !company.trim()) ? 'not-allowed' : 'pointer', marginBottom: '12px' }}
         >
           🚀 Start Interview Simulation
+        </button>
+
+        <button
+          onClick={fetchHistory}
+          className="btn btn-outline"
+          style={{ width: '100%', padding: '14px', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+        >
+          🕒 View Past Interviews
         </button>
       </div>
     </div>
@@ -2195,11 +2233,64 @@ function InterviewView({ userLevel, session }) {
         })}
 
         <button onClick={restart} className="btn btn-outline" style={{ width: '100%', marginTop: '20px', padding: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-          <RefreshCw size={16} /> New Interview
+          <RefreshCw size={16} /> {historyList.length > 0 ? "Back to History" : "New Interview"}
         </button>
       </div>
     );
   }
+
+  // ─── HISTORY ────────────────────────────────────────────────────────────────
+  if (stage === 'history') return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+        <button onClick={() => setStage('setup')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+          <RefreshCw size={20} style={{ transform: 'rotate(-90deg)' }} />
+        </button>
+        <h1 style={{ margin: 0 }}>🕒 Interview History</h1>
+      </div>
+
+      {isFetchingHistory ? (
+        <div style={{ textAlign: 'center', padding: '40px' }}>Loading your history...</div>
+      ) : historyList.length === 0 ? (
+        <div className="card" style={{ textAlign: 'center', padding: '40px' }}>
+          <p style={{ color: 'var(--text-muted)' }}>No interviews performed yet.</p>
+          <button onClick={() => setStage('setup')} className="btn btn-primary" style={{ marginTop: '12px' }}>Start your first one</button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {historyList.map(item => {
+            const date = new Date(item.created_at).toLocaleDateString();
+            const score = item.feedback?.overallScore || 0;
+            return (
+              <button 
+                key={item.id} 
+                onClick={() => loadFromHistory(item)}
+                className="card" 
+                style={{ textAlign: 'left', padding: '16px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', transition: 'all 0.2s' }}
+              >
+                <div>
+                  <div style={{ fontWeight: '700', fontSize: '1rem', color: 'var(--text-main)' }}>{item.job_title}</div>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '2px' }}>{item.company} · {date}</div>
+                  <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
+                    <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '10px', background: '#F1F5F9', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '700' }}>
+                      {item.interview_type}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div>
+                    <div style={{ fontWeight: '900', fontSize: '1.4rem', color: scoreColor(score), lineHeight: 1 }}>{score}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '700' }}>Score</div>
+                  </div>
+                  <ChevronRight size={20} style={{ color: 'var(--text-muted)' }} />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 
   return null;
 }
