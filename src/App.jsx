@@ -848,39 +848,66 @@ function LearnView({ activeDay, appContent, setActiveTab, dayTestLevel, setCurre
       </div>
 
       <div style={{ marginTop: '32px', marginBottom: '32px' }}>
-        {/* Show level picker once all sections are done */}
+        <h3 style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '12px', color: 'var(--text-main)' }}>🎯 Daily Tests</h3>
         {dayLevel === 'advanced' ? (
-          <div style={{ textAlign: 'center', padding: '16px', background: '#ECFDF5', borderRadius: '12px', border: '2px solid #10B981' }}>
-            <div style={{ fontSize: '2rem', marginBottom: '8px' }}>🏆</div>
+          <div style={{ textAlign: 'center', padding: '20px', background: '#ECFDF5', borderRadius: '12px', border: '2px solid #10B981' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>🏆</div>
             <div style={{ fontWeight: '700', color: '#065F46', fontSize: '1.1rem' }}>Day {activeDay} Fully Completed!</div>
-            <div style={{ fontSize: '0.9rem', color: '#047857', marginTop: '4px' }}>Next day unlocked.</div>
+            <div style={{ fontSize: '0.9rem', color: '#047857', marginTop: '4px' }}>Next day unlocked. Keep it up!</div>
           </div>
-        ) : !allDone ? (
-          <button className="btn btn-primary" style={{ width: '100%', padding: '16px', fontSize: '1.1rem', opacity: 0.5, cursor: 'not-allowed' }} disabled>
-            Terminez la leçon pour débloquer le test
-          </button>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <p style={{ textAlign: 'center', fontWeight: '600', color: 'var(--text-main)', marginBottom: '4px' }}>Choose your challenge level:</p>
-            <button
-              className="btn btn-outline"
-              style={{ width: '100%', padding: '16px', fontSize: '1rem', borderColor: '#F59E0B', color: '#B45309', background: '#FFFBEB', opacity: dayLevel === 'intermediate' ? 0.5 : 1, position: 'relative' }}
-              onClick={() => !dayLevel && handleStartTest('intermediate')}
-              disabled={!!dayLevel}
-            >
-              <div style={{ fontWeight: '700' }}>🟡 Intermediate Test</div>
-              <div style={{ fontSize: '0.8rem', marginTop: '2px' }}>Translation → Word selection · Does NOT unlock next day</div>
-              {dayLevel === 'intermediate' && <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '1.2rem' }}>✅</span>}
-            </button>
-            <button
-              className="btn btn-primary"
-              style={{ width: '100%', padding: '16px', fontSize: '1rem', background: dayLevel === 'intermediate' ? 'var(--primary)' : '#94A3B8', borderColor: dayLevel === 'intermediate' ? 'var(--primary)' : '#94A3B8', cursor: dayLevel === 'intermediate' ? 'pointer' : 'not-allowed' }}
-              onClick={() => dayLevel === 'intermediate' && handleStartTest('advanced')}
-              disabled={dayLevel !== 'intermediate'}
-            >
-              <div style={{ fontWeight: '700' }}>🔴 Advanced Test {dayLevel !== 'intermediate' && '🔒'}</div>
-              <div style={{ fontSize: '0.8rem', marginTop: '2px' }}>Fill-in grammar + expressions · Unlocks next day ✨</div>
-            </button>
+            {/* Intermediate Button */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => allDone && !dayLevel && handleStartTest('intermediate')}
+                style={{
+                  width: '100%', padding: '16px', fontSize: '1rem', textAlign: 'left',
+                  background: dayLevel === 'intermediate' ? '#FFFBEB' : (allDone && !dayLevel ? '#FFFBEB' : '#F8FAFC'),
+                  border: `2px solid ${dayLevel === 'intermediate' ? '#F59E0B' : (allDone && !dayLevel ? '#F59E0B' : '#E2E8F0')}`,
+                  borderRadius: '12px', cursor: allDone && !dayLevel ? 'pointer' : 'not-allowed',
+                  opacity: dayLevel === 'intermediate' ? 0.7 : 1,
+                  transition: 'all 0.2s'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: '700', color: '#B45309', fontSize: '1rem' }}>🟡 Intermediate Test</div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      {!allDone ? '🔒 Complete the lesson first' : (dayLevel === 'intermediate' ? '✅ Passed — unlock Advanced' : 'Translation → Word · Warm-up')}
+                    </div>
+                  </div>
+                  {dayLevel === 'intermediate' && <span style={{ fontSize: '1.5rem' }}>✅</span>}
+                  {!allDone && <span style={{ fontSize: '1.3rem' }}>🔒</span>}
+                </div>
+              </button>
+            </div>
+
+            {/* Advanced Button */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => dayLevel === 'intermediate' && handleStartTest('advanced')}
+                style={{
+                  width: '100%', padding: '16px', fontSize: '1rem', textAlign: 'left',
+                  background: dayLevel === 'intermediate' ? '#EEF2FF' : '#F8FAFC',
+                  border: `2px solid ${dayLevel === 'intermediate' ? '#4F46E5' : '#E2E8F0'}`,
+                  borderRadius: '12px', cursor: dayLevel === 'intermediate' ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: '700', color: dayLevel === 'intermediate' ? 'var(--primary)' : '#94A3B8', fontSize: '1rem' }}>
+                      🔴 Advanced Test
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      {dayLevel === 'intermediate' ? '✨ Pass this to unlock next day!' : '🔒 Pass Intermediate first'}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '1.3rem' }}>{dayLevel === 'intermediate' ? '🔓' : '🔒'}</span>
+                </div>
+              </button>
+            </div>
           </div>
         )}
       </div>
