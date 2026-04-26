@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Home, MessageCircle, BookOpen, User, Play, Mic, Send, BookMarked, BrainCircuit, Mic2, Star, Volume2 } from 'lucide-react';
+import { Home, MessageCircle, BookOpen, User, Play, Mic, Send, BookMarked, BrainCircuit, Mic2, Star, Volume2, ChevronDown } from 'lucide-react';
 import './index.css';
 import { dailyContent, dialogues, discussionExpressions } from './data.js';
 import { supabase } from './supabaseClient';
@@ -533,12 +533,16 @@ function LearnView({ activeDay, appContent, setActiveTab }) {
   const [grammarDone, setGrammarDone] = useState(false);
   const [expressionsDone, setExpressionsDone] = useState(false);
   const [dialogueDone, setDialogueDone] = useState(false);
+  const [openSection, setOpenSection] = useState({ vocab: false, grammar: false, expressions: false, dialogue: false });
+
+  const toggleSection = (key) => setOpenSection(prev => ({ ...prev, [key]: !prev[key] }));
 
   useEffect(() => {
     setVocabDone(false);
     setGrammarDone(false);
     setExpressionsDone(false);
     setDialogueDone(false);
+    setOpenSection({ vocab: false, grammar: false, expressions: false, dialogue: false });
   }, [activeDay]);
 
   const speakExample = (text) => {
@@ -563,8 +567,22 @@ function LearnView({ activeDay, appContent, setActiveTab }) {
       <h1 style={{ marginBottom: '8px' }}>Day {activeDay} Material</h1>
       <p style={{ marginBottom: '24px', color: 'var(--primary)', fontWeight: '600' }}>{dayData.title}</p>
       
-      <div className="card">
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Vocabulary for Web Engineers</h2>
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <button onClick={() => toggleSection('vocab')} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: vocabDone ? '#ECFDF5' : 'white', border: 'none', cursor: 'pointer', borderBottom: openSection.vocab ? '1px solid var(--border-color)' : 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '1.3rem' }}>📚</span>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontWeight: '700', fontSize: '1rem', color: 'var(--text-main)' }}>Vocabulary for Web Engineers</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>15 words &amp; technical expressions</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {vocabDone && <span style={{ fontSize: '1rem' }}>✅</span>}
+            <ChevronDown size={20} style={{ color: 'var(--text-muted)', transform: openSection.vocab ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.25s ease' }} />
+          </div>
+        </button>
+        {openSection.vocab && (
+          <div style={{ padding: '16px 20px' }}>
         {displayedVocab.map((v, i) => (
           <div key={i} className="vocab-item" style={{ flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
@@ -606,10 +624,26 @@ function LearnView({ activeDay, appContent, setActiveTab }) {
           <input type="checkbox" checked={vocabDone} readOnly style={{ transform: 'scale(1.5)' }} />
           <span style={{ fontWeight: '600', color: vocabDone ? '#065F46' : '#475569' }}>J'ai mémorisé ce vocabulaire</span>
         </div>
+          </div>
+        )}
       </div>
 
-      <div className="card">
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>Grammar Focus: {dayData.grammarTitle}</h2>
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <button onClick={() => toggleSection('grammar')} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: grammarDone ? '#ECFDF5' : 'white', border: 'none', cursor: 'pointer', borderBottom: openSection.grammar ? '1px solid var(--border-color)' : 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '1.3rem' }}>📝</span>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontWeight: '700', fontSize: '1rem', color: 'var(--text-main)' }}>Grammar Focus</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: '600' }}>{dayData.grammarTitle}</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {grammarDone && <span style={{ fontSize: '1rem' }}>✅</span>}
+            <ChevronDown size={20} style={{ color: 'var(--text-muted)', transform: openSection.grammar ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.25s ease' }} />
+          </div>
+        </button>
+        {openSection.grammar && (
+          <div style={{ padding: '16px 20px' }}>
         
         <div style={{ background: 'var(--bg-color)', padding: '12px', borderRadius: '8px', marginBottom: '16px', borderLeft: '4px solid var(--primary)' }}>
           <h3 style={{ fontSize: '0.95rem', marginBottom: '4px', color: 'var(--primary)' }}>Quand l'utiliser ?</h3>
@@ -646,11 +680,26 @@ function LearnView({ activeDay, appContent, setActiveTab }) {
           <input type="checkbox" checked={grammarDone} readOnly style={{ transform: 'scale(1.5)' }} />
           <span style={{ fontWeight: '600', color: grammarDone ? '#065F46' : '#475569' }}>J'ai compris cette règle de grammaire</span>
         </div>
+          </div>
+        )}
       </div>
 
-      <div className="card">
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '4px' }}>💼 Workplace Expressions</h2>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>10 must-know expressions for your work day.</p>
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <button onClick={() => toggleSection('expressions')} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: expressionsDone ? '#ECFDF5' : 'white', border: 'none', cursor: 'pointer', borderBottom: openSection.expressions ? '1px solid var(--border-color)' : 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '1.3rem' }}>💼</span>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontWeight: '700', fontSize: '1rem', color: 'var(--text-main)' }}>Workplace Expressions</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>10 must-know expressions</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {expressionsDone && <span style={{ fontSize: '1rem' }}>✅</span>}
+            <ChevronDown size={20} style={{ color: 'var(--text-muted)', transform: openSection.expressions ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.25s ease' }} />
+          </div>
+        </button>
+        {openSection.expressions && (
+          <div style={{ padding: '16px 20px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {dayExpressions.map((exp, idx) => {
             const phrase = exp.phrase || exp.expression;
@@ -718,15 +767,30 @@ function LearnView({ activeDay, appContent, setActiveTab }) {
             );
           })}
         </div>
-        <div style={{ marginTop: '24px', padding: '16px', background: expressionsDone ? '#ECFDF5' : '#F1F5F9', borderRadius: '8px', border: `1px solid ${expressionsDone ? '#10B981' : '#E2E8F0'}`, display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => setExpressionsDone(!expressionsDone)}>
+        <div style={{ marginTop: '16px', padding: '16px', background: expressionsDone ? '#ECFDF5' : '#F1F5F9', borderRadius: '8px', border: `1px solid ${expressionsDone ? '#10B981' : '#E2E8F0'}`, display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => setExpressionsDone(!expressionsDone)}>
           <input type="checkbox" checked={expressionsDone} readOnly style={{ transform: 'scale(1.5)' }} />
           <span style={{ fontWeight: '600', color: expressionsDone ? '#065F46' : '#475569' }}>J'ai appris ces expressions</span>
         </div>
+          </div>
+        )}
       </div>
 
-      <div className="card">
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '4px' }}>💬 Workplace Dialogue</h2>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>Read and listen to this real workplace conversation.</p>
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <button onClick={() => toggleSection('dialogue')} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: dialogueDone ? '#ECFDF5' : 'white', border: 'none', cursor: 'pointer', borderBottom: openSection.dialogue ? '1px solid var(--border-color)' : 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '1.3rem' }}>💬</span>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontWeight: '700', fontSize: '1rem', color: 'var(--text-main)' }}>Workplace Dialogue</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Real-world conversation to study</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {dialogueDone && <span style={{ fontSize: '1rem' }}>✅</span>}
+            <ChevronDown size={20} style={{ color: 'var(--text-muted)', transform: openSection.dialogue ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.25s ease' }} />
+          </div>
+        </button>
+        {openSection.dialogue && (
+          <div style={{ padding: '16px 20px' }}>
         <div className="dialogue-chat">
           {dayDialogue.map((line, idx) => {
             const isA = line.speaker === 'A' || (line.speaker && (line.speaker.includes('Mark') || line.speaker.includes('Alex') || line.speaker.includes('James') || line.speaker.includes('PM')));
@@ -750,10 +814,12 @@ function LearnView({ activeDay, appContent, setActiveTab }) {
             );
           })}
         </div>
-        <div style={{ marginTop: '24px', padding: '16px', background: dialogueDone ? '#ECFDF5' : '#F1F5F9', borderRadius: '8px', border: `1px solid ${dialogueDone ? '#10B981' : '#E2E8F0'}`, display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => setDialogueDone(!dialogueDone)}>
+        <div style={{ marginTop: '16px', padding: '16px', background: dialogueDone ? '#ECFDF5' : '#F1F5F9', borderRadius: '8px', border: `1px solid ${dialogueDone ? '#10B981' : '#E2E8F0'}`, display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => setDialogueDone(!dialogueDone)}>
           <input type="checkbox" checked={dialogueDone} readOnly style={{ transform: 'scale(1.5)' }} />
           <span style={{ fontWeight: '600', color: dialogueDone ? '#065F46' : '#475569' }}>J'ai lu et compris ce dialogue</span>
         </div>
+          </div>
+        )}
       </div>
 
       <div style={{ marginTop: '32px', marginBottom: '32px' }}>
