@@ -12,6 +12,8 @@ function App() {
   const [generatedContent, setGeneratedContent] = useState({});
   const [isGenerating, setIsGenerating] = useState(false);
   const [userLevel, setUserLevel] = useState("Not evaluated");
+  const [onboardingStep, setOnboardingStep] = useState('welcome');
+  const [tempLevel, setTempLevel] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -86,7 +88,48 @@ function App() {
   const appContent = { ...dailyContent, ...generatedContent };
 
   if (!session) {
-    return <AuthView />;
+    if (onboardingStep === 'welcome') {
+      return (
+        <div className="auth-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', background: 'var(--bg-color)', textAlign: 'center' }}>
+          <div className="card" style={{ maxWidth: '400px', width: '100%', margin: '0 auto', padding: '40px 20px' }}>
+            <div className="logo-icon" style={{ width: '80px', height: '80px', fontSize: '2.5rem', margin: '0 auto 24px' }}>F</div>
+            <h1 style={{ fontSize: '2rem', marginBottom: '16px' }}>Welcome to Fluent</h1>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '32px', fontSize: '1.1rem' }}>The AI English Coach exclusively designed for Web Engineers.</p>
+            
+            <div style={{ background: '#F8FAFC', padding: '24px', borderRadius: '12px', marginBottom: '32px', textAlign: 'left' }}>
+              <h3 style={{ marginBottom: '12px' }}>Why Fluent?</h3>
+              <ul style={{ paddingLeft: '20px', color: 'var(--text-muted)', margin: 0 }}>
+                <li style={{ marginBottom: '8px' }}>Tech-focused vocabulary</li>
+                <li style={{ marginBottom: '8px' }}>Ultra-realistic Voice AI Stand-ups</li>
+                <li>Daily Bite-sized Immersion</li>
+              </ul>
+            </div>
+
+            <button className="btn btn-primary" style={{ width: '100%', fontSize: '1.1rem', padding: '16px' }} onClick={() => setOnboardingStep('placement')}>
+              Take Placement Test
+            </button>
+            <button className="btn btn-outline" style={{ width: '100%', marginTop: '16px', border: 'none' }} onClick={() => setOnboardingStep('auth')}>
+              I already have an account
+            </button>
+          </div>
+        </div>
+      );
+    }
+    
+    if (onboardingStep === 'placement') {
+      return (
+        <div className="app-container" style={{ background: 'white' }}>
+          <div className="container" style={{ maxWidth: '600px', margin: '0 auto', padding: '40px 20px' }}>
+            <PlacementTestView onComplete={(level) => {
+              setTempLevel(level);
+              setOnboardingStep('auth');
+            }} />
+          </div>
+        </div>
+      );
+    }
+
+    return <AuthView tempLevel={tempLevel} />;
   }
 
   const generateNextWeek = async () => {
@@ -1078,19 +1121,28 @@ function ExpressionsView() {
   );
 }
 
-function AuthView() {
+function AuthView({ tempLevel }) {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(tempLevel ? true : false);
 
   const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
+        
+        if (tempLevel && data?.user?.id) {
+          await supabase.from('user_progress').insert({ 
+            user_id: data.user.id, 
+            active_day: 1,
+            generated_content: { userLevel: tempLevel }
+          });
+        }
+        
         alert('Inscription réussie ! Vérifiez vos emails pour confirmer votre compte (si activé par défaut sur Supabase), ou connectez-vous.');
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
