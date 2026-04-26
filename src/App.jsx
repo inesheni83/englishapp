@@ -15,8 +15,10 @@ function App() {
   const [onboardingStep, setOnboardingStep] = useState('welcome');
   const [tempLevel, setTempLevel] = useState(null);
   const [unlockedDay, setUnlockedDay] = useState(1);
-  const [dayTestLevel, setDayTestLevel] = useState({}); // { [day]: 'intermediate' | 'advanced' }
+  const [dayTestLevel, setDayTestLevel] = useState({});
   const [currentTestLevel, setCurrentTestLevel] = useState('intermediate');
+  const [advancedContent, setAdvancedContent] = useState({});
+  const [isGeneratingAdvanced, setIsGeneratingAdvanced] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -50,6 +52,9 @@ function App() {
               }
               if (data.generated_content.dayTestLevel) {
                 setDayTestLevel(data.generated_content.dayTestLevel);
+              }
+              if (data.generated_content.advancedContent) {
+                setAdvancedContent(data.generated_content.advancedContent);
               }
               const validKeys = Object.keys(data.generated_content).map(Number).filter(n => !isNaN(n));
               const maxDay = validKeys.length > 0 ? Math.max(7, ...validKeys) : 7;
@@ -94,6 +99,52 @@ function App() {
     setGeneratedContent(updatedContent);
     updateProgress(activeDay, updatedContent);
     setActiveTab('profile');
+  };
+
+  const generateAdvancedContent = async (day, dayTitle) => {
+    if (advancedContent[day] || isGeneratingAdvanced) return;
+    setIsGeneratingAdvanced(true);
+    try {
+      const prompt = `Generate ADVANCED English content for a web engineer — Day ${day}: "${dayTitle}".
+      This must be HARDER than intermediate level. Use complex grammar, idiomatic expressions, and challenging vocabulary.
+      Return ONLY a valid JSON object with this exact format:
+      {
+        "vocab": [ { "word": "advanced english word/idiom", "translation": "french translation", "category": "category", "example": "complex professional sentence", "exampleTranslation": "french translation" } ],
+        "grammarTitle": "Advanced Grammar Topic (e.g. Conditionals, Inversion, Subjunctive)",
+        "grammarDesc": "Detailed description when to use it",
+        "grammarSyntax": "Syntax structure",
+        "grammarRules": [ { "title": "Rule name", "example": "Complex example sentence", "translation": "French translation" } ],
+        "expressions": [ { "phrase": "advanced workplace expression", "meaning": "meaning", "example": "full sentence using it", "translation": "french translation" } ],
+        "dialogue": [ { "speaker": "A", "text": "complex english sentence", "translation": "french translation" } ]
+      }
+      Ensure: 15 words in vocab (C1/C2 level), 4 grammarRules, 10 expressions, 8 dialogue lines.`;
+
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: 'You are a pure JSON generator. Return only valid JSON.' }] },
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json' }
+        })
+      });
+      const data = await response.json();
+      if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+        const text = data.candidates[0].content.parts[0].text;
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          const newAdvanced = { ...advancedContent, [day]: parsed };
+          setAdvancedContent(newAdvanced);
+          const updatedContent = { ...generatedContent, advancedContent: newAdvanced };
+          setGeneratedContent(updatedContent);
+          updateProgress(activeDay, updatedContent);
+        }
+      }
+    } catch (e) {
+      console.error('Advanced content generation failed:', e);
+    }
+    setIsGeneratingAdvanced(false);
   };
 
   const appContent = { ...dailyContent, ...generatedContent };
@@ -212,7 +263,16 @@ function App() {
       <main className="container">
         {activeTab === 'home' && <HomeView activeDay={activeDay} setActiveDay={handleSetActiveDay} setActiveTab={setActiveTab} totalDays={totalDays} generateNextWeek={generateNextWeek} isGenerating={isGenerating} unlockedDay={unlockedDay} />}
         {activeTab === 'coach' && <CoachView />}
-        {activeTab === 'learn' && <LearnView activeDay={activeDay} appContent={appContent} setActiveTab={setActiveTab} dayTestLevel={dayTestLevel} setCurrentTestLevel={setCurrentTestLevel} />}
+        {activeTab === 'learn' && <LearnView
+          activeDay={activeDay}
+          appContent={appContent}
+          setActiveTab={setActiveTab}
+          dayTestLevel={dayTestLevel}
+          setCurrentTestLevel={setCurrentTestLevel}
+          advancedContent={advancedContent}
+          generateAdvancedContent={generateAdvancedContent}
+          isGeneratingAdvanced={isGeneratingAdvanced}
+        />}
         {activeTab === 'dialogues' && <DialoguesView />}
         {activeTab === 'expressions' && <ExpressionsView />}
         {activeTab === 'profile' && <ProfileView activeDay={activeDay} session={session} setActiveTab={setActiveTab} userLevel={userLevel} />}
@@ -544,8 +604,9 @@ function CoachView() {
   );
 }
 
-function LearnView({ activeDay, appContent, setActiveTab, dayTestLevel, setCurrentTestLevel }) {
+function LearnView({ activeDay, appContent, setActiveTab, dayTestLevel, setCurrentTestLevel, advancedContent, generateAdvancedContent, isGeneratingAdvanced }) {
   const [showAllVocab, setShowAllVocab] = useState(false);
+  const [selectedLevel, setSelectedLevel] = useState('intermediate');
   const [vocabDone, setVocabDone] = useState(false);
   const [grammarDone, setGrammarDone] = useState(false);
   const [expressionsDone, setExpressionsDone] = useState(false);
@@ -555,11 +616,33 @@ function LearnView({ activeDay, appContent, setActiveTab, dayTestLevel, setCurre
   const toggleSection = (key) => setOpenSection(prev => ({ ...prev, [key]: !prev[key] }));
 
   const allDone = vocabDone && grammarDone && expressionsDone && dialogueDone;
-  const dayLevel = dayTestLevel?.[activeDay]; // null | 'intermediate' | 'advanced'
+  const dayLevel = dayTestLevel?.[activeDay];
 
   const handleStartTest = (level) => {
     setCurrentTestLevel(level);
     setActiveTab('test');
+  };
+
+  const handleSelectAdvanced = () => {
+    const baseData = appContent[activeDay] || appContent[1];
+    if (!advancedContent[activeDay]) {
+      generateAdvancedContent(activeDay, baseData.title);
+    }
+    setSelectedLevel('advanced');
+    setVocabDone(false);
+    setGrammarDone(false);
+    setExpressionsDone(false);
+    setDialogueDone(false);
+    setOpenSection({ vocab: false, grammar: false, expressions: false, dialogue: false });
+  };
+
+  const handleSelectIntermediate = () => {
+    setSelectedLevel('intermediate');
+    setVocabDone(false);
+    setGrammarDone(false);
+    setExpressionsDone(false);
+    setDialogueDone(false);
+    setOpenSection({ vocab: false, grammar: false, expressions: false, dialogue: false });
   };
 
   useEffect(() => {
@@ -567,6 +650,7 @@ function LearnView({ activeDay, appContent, setActiveTab, dayTestLevel, setCurre
     setGrammarDone(false);
     setExpressionsDone(false);
     setDialogueDone(false);
+    setSelectedLevel('intermediate');
     setOpenSection({ vocab: false, grammar: false, expressions: false, dialogue: false });
   }, [activeDay]);
 
@@ -580,7 +664,9 @@ function LearnView({ activeDay, appContent, setActiveTab, dayTestLevel, setCurre
     }
   };
 
-  const dayData = appContent[activeDay] || appContent[1];
+  const baseData = appContent[activeDay] || appContent[1];
+  const advData = advancedContent[activeDay];
+  const dayData = (selectedLevel === 'advanced' && advData) ? advData : baseData;
   const displayedVocab = showAllVocab ? dayData.vocab : dayData.vocab.slice(0, 4);
 
   const startIndex = ((activeDay - 1) % 3) * 10;
@@ -589,8 +675,58 @@ function LearnView({ activeDay, appContent, setActiveTab, dayTestLevel, setCurre
 
   return (
     <div>
-      <h1 style={{ marginBottom: '8px' }}>Day {activeDay} Material</h1>
-      <p style={{ marginBottom: '24px', color: 'var(--primary)', fontWeight: '600' }}>{dayData.title}</p>
+      <h1 style={{ marginBottom: '4px' }}>Day {activeDay}: {baseData.title}</h1>
+      <p style={{ marginBottom: '20px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Choose your learning level below.</p>
+
+      {/* Level Tab Switcher */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', background: '#F1F5F9', padding: '6px', borderRadius: '12px' }}>
+        <button
+          onClick={handleSelectIntermediate}
+          style={{
+            flex: 1, padding: '10px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '0.9rem',
+            background: selectedLevel === 'intermediate' ? 'white' : 'transparent',
+            color: selectedLevel === 'intermediate' ? '#B45309' : 'var(--text-muted)',
+            boxShadow: selectedLevel === 'intermediate' ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+            transition: 'all 0.2s'
+          }}
+        >
+          🟡 Intermediate
+        </button>
+        <button
+          onClick={() => dayLevel === 'intermediate' || dayLevel === 'advanced' ? handleSelectAdvanced() : null}
+          style={{
+            flex: 1, padding: '10px', borderRadius: '8px', border: 'none',
+            cursor: (dayLevel === 'intermediate' || dayLevel === 'advanced') ? 'pointer' : 'not-allowed',
+            fontWeight: '700', fontSize: '0.9rem',
+            background: selectedLevel === 'advanced' ? 'white' : 'transparent',
+            color: selectedLevel === 'advanced' ? 'var(--primary)' : (dayLevel === 'intermediate' || dayLevel === 'advanced') ? '#4F46E5' : '#94A3B8',
+            boxShadow: selectedLevel === 'advanced' ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+            transition: 'all 0.2s'
+          }}
+        >
+          🔴 Advanced {!(dayLevel === 'intermediate' || dayLevel === 'advanced') ? '🔒' : ''}
+        </button>
+      </div>
+
+      {/* Advanced — loading state */}
+      {selectedLevel === 'advanced' && isGeneratingAdvanced && (
+        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '12px' }}>✨</div>
+          <p>Generating your Advanced content with AI...</p>
+        </div>
+      )}
+
+      {/* Advanced — not yet unlocked */}
+      {selectedLevel === 'advanced' && !advData && !isGeneratingAdvanced && !(dayLevel === 'intermediate' || dayLevel === 'advanced') && (
+        <div style={{ textAlign: 'center', padding: '40px', background: '#F8FAFC', borderRadius: '12px', border: '2px dashed #E2E8F0' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🔒</div>
+          <p style={{ fontWeight: '600' }}>Pass the Intermediate Test first to unlock Advanced content.</p>
+        </div>
+      )}
+
+      {/* Content (shown when data is available for selected level) */}
+      {(selectedLevel === 'intermediate' || (selectedLevel === 'advanced' && advData && !isGeneratingAdvanced)) && (
+      <>
       
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <button onClick={() => toggleSection('vocab')} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: vocabDone ? '#ECFDF5' : 'white', border: 'none', cursor: 'pointer', borderBottom: openSection.vocab ? '1px solid var(--border-color)' : 'none' }}>
@@ -911,6 +1047,7 @@ function LearnView({ activeDay, appContent, setActiveTab, dayTestLevel, setCurre
           </div>
         )}
       </div>
+      </> )} {/* end content conditional */}
     </div>
   );
 }
