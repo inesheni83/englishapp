@@ -1888,6 +1888,23 @@ function InterviewView({ userLevel, session }) {
       if (result) {
         setFeedback(result);
         setStage('feedback');
+        
+        // Save to Supabase
+        if (session?.user) {
+          try {
+            await supabase.from('interviews').insert({
+              user_id: session.user.id,
+              job_title: jobTitle,
+              company: company,
+              interview_type: interviewType,
+              questions: questions,
+              answers: allAnswers,
+              feedback: result
+            });
+          } catch (dbErr) {
+            console.error("Error saving interview to DB:", dbErr);
+          }
+        }
       } else {
         setStage('interview');
         alert('Feedback generation failed. Please try again.');
