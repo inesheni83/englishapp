@@ -556,7 +556,7 @@ function LearnView({ activeDay, appContent, setActiveTab }) {
 
   const startIndex = ((activeDay - 1) % 3) * 10;
   const dayExpressions = dayData.expressions || discussionExpressions.slice(startIndex, startIndex + 10);
-  const dayDialogue = dayData.dialogue || (dialogues[(activeDay - 1) % dialogues.length].conversation);
+  const dayDialogue = dayData.dialogue || (dialogues[(activeDay - 1) % dialogues.length].lines);
 
   return (
     <div>
