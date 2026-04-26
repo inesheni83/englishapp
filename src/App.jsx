@@ -119,30 +119,62 @@ function App() {
     const intermediateGrammar = intermediateData?.grammarTitle || '';
 
     try {
-      const prompt = `You are an expert English teacher. Generate ADVANCED content for a Web Engineer at CEFR level ${levelBand}, Day ${day}: "${dayTitle}".
+      const prompt = `You are an expert bilingual English teacher. Generate ADVANCED English content for a francophone Web Engineer at CEFR level ${levelBand}, Day ${day}: "${dayTitle}".
 
-      CONTEXT (Intermediate content already covered):
+      LANGUAGE RULE (MANDATORY):
+      - ALL content (words, examples, sentences, dialogue, expressions) MUST be written in ENGLISH.
+      - French is used ONLY for the "translation" / "exampleTranslation" / "meaning" fields.
+      - NEVER write French in the "word", "example", "text", "phrase", "grammarDesc", "grammarSyntax" fields.
+
+      CONTEXT (Intermediate content already covered — DO NOT repeat):
       - Vocabulary already studied: ${intermediateWords}
       - Grammar already studied: ${intermediateGrammar}
 
-      YOUR TASK: Create harder content within the SAME ${levelBand} level band — do NOT go to a higher level.
-      - Use the SAME thematic topic (${dayTitle}) but go DEEPER
-      - New vocabulary: more nuanced, less common synonyms and collocations (NEVER repeat the intermediate words)
-      - Grammar: choose a MORE COMPLEX rule within ${levelBand} (e.g., inversion, mixed conditionals, advanced passive, discourse markers)
-      - Expressions: more idiomatic, less textbook (professional register)
-      - Dialogue: more natural, shows complex negotiation or technical discussion
+      YOUR TASK: Create harder content within the SAME ${levelBand} level band — do NOT exceed this level.
+      - Same topic (${dayTitle}) but DEEPER — more nuanced, less common, more professional
+      - Vocabulary: more advanced synonyms, collocations, idioms NOT in the intermediate list
+      - Grammar: a MORE COMPLEX rule within ${levelBand} (e.g., advanced passive, discourse markers, inversion, mixed conditionals)
+      - Expressions: more idiomatic, professional register — each must be a COMPLETE English sentence in the "example" field
+      - Dialogue: natural, complex — a real workplace scenario in English with 8 lines
 
-      Return ONLY valid JSON:
+      Return ONLY this valid JSON (no markdown, no explanation):
       {
-        "vocab": [ { "word": "...", "translation": "...", "category": "...", "example": "complex professional sentence", "exampleTranslation": "..." } ],
-        "grammarTitle": "...",
-        "grammarDesc": "...",
-        "grammarSyntax": "...",
-        "grammarRules": [ { "title": "...", "example": "...", "translation": "..." } ],
-        "expressions": [ { "phrase": "...", "meaning": "...", "example": "full sentence", "translation": "..." } ],
-        "dialogue": [ { "speaker": "A", "text": "...", "translation": "..." } ]
+        "vocab": [
+          {
+            "word": "ENGLISH word or idiom",
+            "translation": "traduction française",
+            "category": "category in English",
+            "example": "A complete English sentence using this word.",
+            "exampleTranslation": "Traduction française de cette phrase."
+          }
+        ],
+        "grammarTitle": "Advanced Grammar Rule Title in English",
+        "grammarDesc": "English explanation of when and why to use this grammar rule.",
+        "grammarSyntax": "English syntax structure (e.g., Subject + had + past participle)",
+        "grammarRules": [
+          {
+            "title": "1. Rule name in English",
+            "example": "A complete English sentence illustrating this rule.",
+            "translation": "Traduction française de cette phrase."
+          }
+        ],
+        "expressions": [
+          {
+            "phrase": "The English expression",
+            "meaning": "Explication courte en français",
+            "example": "A complete English sentence using this expression naturally.",
+            "translation": "Traduction française de la phrase d'exemple."
+          }
+        ],
+        "dialogue": [
+          {
+            "speaker": "A",
+            "text": "The English sentence spoken by speaker A.",
+            "translation": "Traduction française."
+          }
+        ]
       }
-      Ensure: exactly 15 vocab words, 4 grammarRules, exactly 10 expressions, 8 dialogue lines.`;
+      Constraints: exactly 15 vocab words, exactly 4 grammarRules, exactly 10 expressions, exactly 8 dialogue lines.`;
 
       const response = await fetch('/api/gemini', {
         method: 'POST',
