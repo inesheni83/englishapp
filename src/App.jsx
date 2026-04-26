@@ -612,7 +612,40 @@ function TestView({ activeDay, appContent, onComplete }) {
   const [questions, setQuestions] = useState([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [score, setScore] = useState(0);
+  const [lives, setLives] = useState(3);
   const [finished, setFinished] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
+
+  const playSound = (type) => {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      if (type === 'success') {
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+        oscillator.frequency.setValueAtTime(1108.73, audioCtx.currentTime + 0.1); // C#6
+        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.4);
+      } else if (type === 'error') {
+        oscillator.type = 'sawtooth';
+        oscillator.frequency.setValueAtTime(200, audioCtx.currentTime);
+        oscillator.frequency.linearRampToValueAtTime(150, audioCtx.currentTime + 0.3);
+        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.3);
+      }
+    } catch (e) {
+      console.log('Audio error', e);
+    }
+  };
 
   useEffect(() => {
     const dayData = appContent[activeDay];
@@ -638,14 +671,35 @@ function TestView({ activeDay, appContent, onComplete }) {
 
   const handleOptionClick = (option) => {
     if (option === questions[currentIdx].answer) {
+      playSound('success');
       setScore(score + 1);
+    } else {
+      playSound('error');
+      const newLives = lives - 1;
+      setLives(newLives);
+      if (newLives === 0) {
+        setGameOver(true);
+        return;
+      }
     }
+    
     if (currentIdx < questions.length - 1) {
       setCurrentIdx(currentIdx + 1);
     } else {
       setFinished(true);
     }
   };
+
+  if (gameOver) {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+        <h1 style={{ fontSize: '4rem', marginBottom: '16px' }}>💔</h1>
+        <h2>Game Over!</h2>
+        <p style={{ margin: '16px 0', fontSize: '1.2rem' }}>You made 3 mistakes. Try again later!</p>
+        <button className="btn btn-primary" onClick={onComplete} style={{ width: '100%', marginTop: '24px' }}>Back to Profile</button>
+      </div>
+    );
+  }
 
   if (finished) {
     return (
@@ -664,7 +718,13 @@ function TestView({ activeDay, appContent, onComplete }) {
 
   return (
     <div>
-      <h2 style={{ marginBottom: '8px' }}>Day {activeDay} Quiz</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <h2 style={{ margin: 0 }}>Day {activeDay} Quiz</h2>
+        <div style={{ fontSize: '1.2rem', color: '#EF4444', fontWeight: 'bold' }}>
+          {'❤️ '.repeat(lives)}{'🤍 '.repeat(3 - lives)}
+        </div>
+      </div>
+      
       <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>Question {currentIdx + 1} of {questions.length}</p>
       
       <div className="card" style={{ marginBottom: '24px', padding: '40px 20px', textAlign: 'center', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
