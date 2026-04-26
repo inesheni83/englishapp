@@ -199,7 +199,7 @@ function App() {
       <main className="container">
         {activeTab === 'home' && <HomeView activeDay={activeDay} setActiveDay={handleSetActiveDay} setActiveTab={setActiveTab} totalDays={totalDays} generateNextWeek={generateNextWeek} isGenerating={isGenerating} />}
         {activeTab === 'coach' && <CoachView />}
-        {activeTab === 'learn' && <LearnView activeDay={activeDay} appContent={appContent} />}
+        {activeTab === 'learn' && <LearnView activeDay={activeDay} appContent={appContent} setActiveTab={setActiveTab} />}
         {activeTab === 'dialogues' && <DialoguesView />}
         {activeTab === 'expressions' && <ExpressionsView />}
         {activeTab === 'profile' && <ProfileView activeDay={activeDay} session={session} setActiveTab={setActiveTab} userLevel={userLevel} />}
@@ -489,8 +489,15 @@ function CoachView() {
   );
 }
 
-function LearnView({ activeDay, appContent }) {
+function LearnView({ activeDay, appContent, setActiveTab }) {
   const [showAllVocab, setShowAllVocab] = useState(false);
+  const [vocabDone, setVocabDone] = useState(false);
+  const [grammarDone, setGrammarDone] = useState(false);
+
+  useEffect(() => {
+    setVocabDone(false);
+    setGrammarDone(false);
+  }, [activeDay]);
 
   const speakExample = (text) => {
     if ('speechSynthesis' in window) {
@@ -549,6 +556,10 @@ function LearnView({ activeDay, appContent }) {
         >
           {showAllVocab ? 'Show Less' : 'View All 15 Words'}
         </button>
+        <div style={{ marginTop: '24px', padding: '16px', background: vocabDone ? '#ECFDF5' : '#F1F5F9', borderRadius: '8px', border: `1px solid ${vocabDone ? '#10B981' : '#E2E8F0'}`, display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => setVocabDone(!vocabDone)}>
+          <input type="checkbox" checked={vocabDone} readOnly style={{ transform: 'scale(1.5)' }} />
+          <span style={{ fontWeight: '600', color: vocabDone ? '#065F46' : '#475569' }}>J'ai mémorisé ce vocabulaire</span>
+        </div>
       </div>
 
       <div className="card">
@@ -585,6 +596,21 @@ function LearnView({ activeDay, appContent }) {
             </div>
           ))}
         </div>
+        <div style={{ marginTop: '24px', padding: '16px', background: grammarDone ? '#ECFDF5' : '#F1F5F9', borderRadius: '8px', border: `1px solid ${grammarDone ? '#10B981' : '#E2E8F0'}`, display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => setGrammarDone(!grammarDone)}>
+          <input type="checkbox" checked={grammarDone} readOnly style={{ transform: 'scale(1.5)' }} />
+          <span style={{ fontWeight: '600', color: grammarDone ? '#065F46' : '#475569' }}>J'ai compris cette règle de grammaire</span>
+        </div>
+      </div>
+
+      <div style={{ marginTop: '32px', marginBottom: '32px' }}>
+        <button 
+          className="btn btn-primary" 
+          style={{ width: '100%', padding: '16px', fontSize: '1.1rem', opacity: (vocabDone && grammarDone) ? 1 : 0.5, cursor: (vocabDone && grammarDone) ? 'pointer' : 'not-allowed' }} 
+          disabled={!(vocabDone && grammarDone)}
+          onClick={() => setActiveTab('test')}
+        >
+          {vocabDone && grammarDone ? "Passer le Test du Jour 🏆" : "Terminez la leçon pour débloquer le test"}
+        </button>
       </div>
     </div>
   );
@@ -637,8 +663,6 @@ function ProfileView({ activeDay, session, setActiveTab, userLevel }) {
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>{Math.max(0, 7 - activeDay)} days left</div>
         </div>
       </div>
-
-      <button className="btn btn-primary" style={{ width: '100%', marginTop: '24px' }} onClick={() => setActiveTab('test')}>End of Day Test</button>
       
       <button 
         onClick={handleLogout}
