@@ -576,17 +576,17 @@ function TestView({ activeDay, appContent, onComplete }) {
 
     const vocab = dayData.vocab;
     const shuffled = [...vocab].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, 5); // 5 questions
+    const selected = shuffled.slice(0, 10); // 10 questions
     
     const generatedQs = selected.map(wordObj => {
       const others = vocab.filter(v => v.word !== wordObj.word);
-      const wrongOptions = [...others].sort(() => 0.5 - Math.random()).slice(0, 3).map(v => v.translation);
-      const options = [...wrongOptions, wordObj.translation].sort(() => 0.5 - Math.random());
+      const wrongOptions = [...others].sort(() => 0.5 - Math.random()).slice(0, 3).map(v => v.word);
+      const options = [...wrongOptions, wordObj.word].sort(() => 0.5 - Math.random());
       
       return {
-        question: `Que signifie le mot "${wordObj.word}" ?`,
+        question: `Select the English word for: "${wordObj.translation}"`,
         options: options,
-        answer: wordObj.translation
+        answer: wordObj.word
       };
     });
     setQuestions(generatedQs);
@@ -606,22 +606,22 @@ function TestView({ activeDay, appContent, onComplete }) {
   if (finished) {
     return (
       <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-        <h1 style={{ fontSize: '4rem', marginBottom: '16px' }}>{score >= 4 ? '🏆' : '👏'}</h1>
-        <h2>Test Terminé !</h2>
-        <p style={{ margin: '16px 0', fontSize: '1.2rem' }}>Votre score : <strong style={{ color: 'var(--primary)' }}>{score} / {questions.length}</strong></p>
-        <button className="btn btn-primary" onClick={onComplete} style={{ width: '100%', marginTop: '24px' }}>Retour au Profil</button>
+        <h1 style={{ fontSize: '4rem', marginBottom: '16px' }}>{score >= 8 ? '🏆' : '👏'}</h1>
+        <h2>Quiz Completed!</h2>
+        <p style={{ margin: '16px 0', fontSize: '1.2rem' }}>Your score: <strong style={{ color: 'var(--primary)' }}>{score} / {questions.length}</strong></p>
+        <button className="btn btn-primary" onClick={onComplete} style={{ width: '100%', marginTop: '24px' }}>Back to Profile</button>
       </div>
     );
   }
 
-  if (questions.length === 0) return <div>Chargement du test...</div>;
+  if (questions.length === 0) return <div>Loading quiz...</div>;
 
   const q = questions[currentIdx];
 
   return (
     <div>
-      <h2 style={{ marginBottom: '8px' }}>Test du Jour {activeDay}</h2>
-      <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>Question {currentIdx + 1} / {questions.length}</p>
+      <h2 style={{ marginBottom: '8px' }}>Day {activeDay} Quiz</h2>
+      <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>Question {currentIdx + 1} of {questions.length}</p>
       
       <div className="card" style={{ marginBottom: '24px', padding: '40px 20px', textAlign: 'center', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
         <h3 style={{ fontSize: '1.4rem', margin: '0', color: '#1E293B' }}>{q.question}</h3>
