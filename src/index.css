@@ -447,3 +447,107 @@ p {
   margin-bottom: 8px;
   font-size: 0.95rem;
 }
+
+/* === Workplace Dialogue Bubbles === */
+.dialogue-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.dialogue-bubble-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.dialogue-bubble-row.row-b {
+  flex-direction: row-reverse;
+}
+
+.dialogue-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  color: white;
+}
+
+.avatar-a {
+  background: linear-gradient(135deg, #4F46E5, #7C3AED);
+}
+
+.avatar-b {
+  background: linear-gradient(135deg, #10B981, #059669);
+}
+
+.dialogue-bubble {
+  max-width: 80%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bubble-a .bubble-text {
+  background: linear-gradient(135deg, #EEF2FF, #E0E7FF);
+  border: 1px solid #C7D2FE;
+  border-radius: 16px 16px 16px 4px;
+  padding: 10px 14px;
+}
+
+.bubble-b .bubble-text {
+  background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+  border: 1px solid #A7F3D0;
+  border-radius: 16px 16px 4px 16px;
+  align-self: flex-end;
+}
+
+.bubble-text {
+  padding: 10px 14px;
+}
+
+.bubble-english {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.5;
+}
+
+.bubble-french {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: 2px;
+}
+
+.bubble-audio-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--primary);
+  padding: 2px 4px;
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+  vertical-align: middle;
+}
+
+.bubble-audio-btn:hover {
+  opacity: 1;
+}
+
+.bubble-speaker {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 4px;
+}

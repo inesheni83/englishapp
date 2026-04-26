@@ -682,25 +682,30 @@ function LearnView({ activeDay, appContent, setActiveTab }) {
       </div>
 
       <div className="card">
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Workplace Dialogue</h2>
-        <div className="dialogue-container">
-          {dayDialogue.map((line, idx) => (
-            <div key={idx} className={`dialogue-line ${line.speaker === 'A' ? 'speaker-a' : 'speaker-b'}`}>
-              <div className="speaker-avatar">{line.speaker}</div>
-              <div className="dialogue-content">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <p className="english-text">{line.text}</p>
-                  <button 
-                    onClick={() => speakExample(line.text)}
-                    style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: '4px' }}
-                  >
-                    <Volume2 size={14} />
-                  </button>
+        <h2 style={{ fontSize: '1.2rem', marginBottom: '4px' }}>💬 Workplace Dialogue</h2>
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>Read and listen to this real workplace conversation.</p>
+        <div className="dialogue-chat">
+          {dayDialogue.map((line, idx) => {
+            const isA = line.speaker === 'A' || (line.speaker && (line.speaker.includes('Mark') || line.speaker.includes('Alex') || line.speaker.includes('James') || line.speaker.includes('PM')));
+            const bubbleClass = isA ? 'bubble-a' : 'bubble-b';
+            const avatarClass = isA ? 'avatar-a' : 'avatar-b';
+            const avatarLabel = (line.speaker || '?').charAt(0).toUpperCase();
+            return (
+              <div key={idx} className={`dialogue-bubble-row ${isA ? 'row-a' : 'row-b'}`}>
+                <div className={`dialogue-avatar ${avatarClass}`}>{avatarLabel}</div>
+                <div className={`dialogue-bubble ${bubbleClass}`}>
+                  <span className="bubble-speaker">{line.speaker}</span>
+                  <div className="bubble-text">
+                    <span className="bubble-english">{line.text}</span>
+                    <button className="bubble-audio-btn" onClick={() => speakExample(line.text)} title="Listen">
+                      <Volume2 size={13} />
+                    </button>
+                    {line.translation && <p className="bubble-french">{line.translation}</p>}
+                  </div>
                 </div>
-                <p className="french-translation">{line.translation}</p>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div style={{ marginTop: '24px', padding: '16px', background: dialogueDone ? '#ECFDF5' : '#F1F5F9', borderRadius: '8px', border: `1px solid ${dialogueDone ? '#10B981' : '#E2E8F0'}`, display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => setDialogueDone(!dialogueDone)}>
           <input type="checkbox" checked={dialogueDone} readOnly style={{ transform: 'scale(1.5)' }} />
