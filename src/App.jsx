@@ -151,10 +151,12 @@ function App() {
           "grammarTitle": "Titre grammaire",
           "grammarDesc": "Description détaillée",
           "grammarSyntax": "Syntaxe",
-          "grammarRules": [ { "title": "1. Verbe ou Règle", "example": "Exemple d'utilisation", "translation": "Traduction exacte en français de l'exemple" } ]
+          "grammarRules": [ { "title": "1. Verbe ou Règle", "example": "Exemple d'utilisation", "translation": "Traduction exacte en français de l'exemple" } ],
+          "expressions": [ { "phrase": "expression en anglais", "meaning": "sens", "context": "contexte en français" } ],
+          "dialogue": [ { "speaker": "A", "text": "texte anglais", "translation": "traduction" } ]
         }
       }
-      Assure-toi que chaque jour a exactement 15 mots dans 'vocab' et 3 ou 4 objets dans 'grammarRules'.`;
+      Assure-toi que chaque jour a exactement 15 mots dans 'vocab', 3 ou 4 objets dans 'grammarRules', 10 objets dans 'expressions', et un 'dialogue' de 6 à 8 répliques.`;
 
       const response = await fetch('/api/gemini', {
         method: 'POST',
@@ -529,10 +531,14 @@ function LearnView({ activeDay, appContent, setActiveTab }) {
   const [showAllVocab, setShowAllVocab] = useState(false);
   const [vocabDone, setVocabDone] = useState(false);
   const [grammarDone, setGrammarDone] = useState(false);
+  const [expressionsDone, setExpressionsDone] = useState(false);
+  const [dialogueDone, setDialogueDone] = useState(false);
 
   useEffect(() => {
     setVocabDone(false);
     setGrammarDone(false);
+    setExpressionsDone(false);
+    setDialogueDone(false);
   }, [activeDay]);
 
   const speakExample = (text) => {
@@ -547,6 +553,10 @@ function LearnView({ activeDay, appContent, setActiveTab }) {
 
   const dayData = appContent[activeDay] || appContent[1];
   const displayedVocab = showAllVocab ? dayData.vocab : dayData.vocab.slice(0, 4);
+
+  const startIndex = ((activeDay - 1) % 3) * 10;
+  const dayExpressions = dayData.expressions || discussionExpressions.slice(startIndex, startIndex + 10);
+  const dayDialogue = dayData.dialogue || (dialogues[(activeDay - 1) % dialogues.length].conversation);
 
   return (
     <div>
@@ -638,14 +648,74 @@ function LearnView({ activeDay, appContent, setActiveTab }) {
         </div>
       </div>
 
+      <div className="card">
+        <h2 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Workplace Expressions</h2>
+        {dayExpressions.map((exp, idx) => (
+          <div key={idx} style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '1.05rem', marginBottom: '4px' }}>
+                  {exp.phrase || exp.expression}
+                </div>
+                <div style={{ fontSize: '0.9rem', color: 'var(--primary)', marginBottom: '4px' }}>
+                  {exp.meaning || exp.context}
+                </div>
+                {(exp.context || exp.translation) && (
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    {exp.translation || exp.context}
+                  </div>
+                )}
+              </div>
+              <button 
+                onClick={() => speakExample(exp.phrase || exp.expression)}
+                style={{ background: 'var(--accent-light)', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: '8px', borderRadius: '50%', flexShrink: 0 }}
+              >
+                <Volume2 size={16} />
+              </button>
+            </div>
+          </div>
+        ))}
+        <div style={{ marginTop: '24px', padding: '16px', background: expressionsDone ? '#ECFDF5' : '#F1F5F9', borderRadius: '8px', border: `1px solid ${expressionsDone ? '#10B981' : '#E2E8F0'}`, display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => setExpressionsDone(!expressionsDone)}>
+          <input type="checkbox" checked={expressionsDone} readOnly style={{ transform: 'scale(1.5)' }} />
+          <span style={{ fontWeight: '600', color: expressionsDone ? '#065F46' : '#475569' }}>J'ai appris ces expressions</span>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Workplace Dialogue</h2>
+        <div className="dialogue-container">
+          {dayDialogue.map((line, idx) => (
+            <div key={idx} className={`dialogue-line ${line.speaker === 'A' ? 'speaker-a' : 'speaker-b'}`}>
+              <div className="speaker-avatar">{line.speaker}</div>
+              <div className="dialogue-content">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <p className="english-text">{line.text}</p>
+                  <button 
+                    onClick={() => speakExample(line.text)}
+                    style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: '4px' }}
+                  >
+                    <Volume2 size={14} />
+                  </button>
+                </div>
+                <p className="french-translation">{line.translation}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: '24px', padding: '16px', background: dialogueDone ? '#ECFDF5' : '#F1F5F9', borderRadius: '8px', border: `1px solid ${dialogueDone ? '#10B981' : '#E2E8F0'}`, display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => setDialogueDone(!dialogueDone)}>
+          <input type="checkbox" checked={dialogueDone} readOnly style={{ transform: 'scale(1.5)' }} />
+          <span style={{ fontWeight: '600', color: dialogueDone ? '#065F46' : '#475569' }}>J'ai lu et compris ce dialogue</span>
+        </div>
+      </div>
+
       <div style={{ marginTop: '32px', marginBottom: '32px' }}>
         <button 
           className="btn btn-primary" 
-          style={{ width: '100%', padding: '16px', fontSize: '1.1rem', opacity: (vocabDone && grammarDone) ? 1 : 0.5, cursor: (vocabDone && grammarDone) ? 'pointer' : 'not-allowed' }} 
-          disabled={!(vocabDone && grammarDone)}
+          style={{ width: '100%', padding: '16px', fontSize: '1.1rem', opacity: (vocabDone && grammarDone && expressionsDone && dialogueDone) ? 1 : 0.5, cursor: (vocabDone && grammarDone && expressionsDone && dialogueDone) ? 'pointer' : 'not-allowed' }} 
+          disabled={!(vocabDone && grammarDone && expressionsDone && dialogueDone)}
           onClick={() => setActiveTab('test')}
         >
-          {vocabDone && grammarDone ? "Passer le Test du Jour 🏆" : "Terminez la leçon pour débloquer le test"}
+          {vocabDone && grammarDone && expressionsDone && dialogueDone ? "Passer le Test du Jour 🏆" : "Terminez la leçon pour débloquer le test"}
         </button>
       </div>
     </div>
