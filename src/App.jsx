@@ -2098,7 +2098,6 @@ function InterviewView({ userLevel, session }) {
 
   // ─── FEEDBACK ────────────────────────────────────────────────────────────────
   if (stage === 'feedback' && feedback) {
-    const [openIdx, setOpenIdx] = useState(null);
     const overallColor = scoreColor(feedback.overallScore);
     return (
       <div>
