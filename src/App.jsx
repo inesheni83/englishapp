@@ -146,7 +146,8 @@ function App() {
         {activeTab === 'learn' && <LearnView activeDay={activeDay} appContent={appContent} />}
         {activeTab === 'dialogues' && <DialoguesView />}
         {activeTab === 'expressions' && <ExpressionsView />}
-        {activeTab === 'profile' && <ProfileView activeDay={activeDay} session={session} />}
+        {activeTab === 'profile' && <ProfileView activeDay={activeDay} session={session} setActiveTab={setActiveTab} />}
+        {activeTab === 'test' && <TestView activeDay={activeDay} appContent={appContent} onComplete={() => setActiveTab('profile')} />}
       </main>
 
       <nav className="bottom-nav">
@@ -505,7 +506,7 @@ function LearnView({ activeDay, appContent }) {
   );
 }
 
-function ProfileView({ activeDay, session }) {
+function ProfileView({ activeDay, session, setActiveTab }) {
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
@@ -550,7 +551,7 @@ function ProfileView({ activeDay, session }) {
         </div>
       </div>
 
-      <button className="btn btn-primary" style={{ width: '100%', marginTop: '24px' }}>End of Day Test</button>
+      <button className="btn btn-primary" style={{ width: '100%', marginTop: '24px' }} onClick={() => setActiveTab('test')}>End of Day Test</button>
       
       <button 
         onClick={handleLogout}
@@ -559,6 +560,95 @@ function ProfileView({ activeDay, session }) {
       >
         Se déconnecter
       </button>
+    </div>
+  );
+}
+
+function TestView({ activeDay, appContent, onComplete }) {
+  const [questions, setQuestions] = useState([]);
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [score, setScore] = useState(0);
+  const [finished, setFinished] = useState(false);
+
+  useEffect(() => {
+    const dayData = appContent[activeDay];
+    if (!dayData || !dayData.vocab) return;
+
+    const vocab = dayData.vocab;
+    const shuffled = [...vocab].sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, 5); // 5 questions
+    
+    const generatedQs = selected.map(wordObj => {
+      const others = vocab.filter(v => v.word !== wordObj.word);
+      const wrongOptions = [...others].sort(() => 0.5 - Math.random()).slice(0, 3).map(v => v.translation);
+      const options = [...wrongOptions, wordObj.translation].sort(() => 0.5 - Math.random());
+      
+      return {
+        question: `Que signifie le mot "${wordObj.word}" ?`,
+        options: options,
+        answer: wordObj.translation
+      };
+    });
+    setQuestions(generatedQs);
+  }, [activeDay, appContent]);
+
+  const handleOptionClick = (option) => {
+    if (option === questions[currentIdx].answer) {
+      setScore(score + 1);
+    }
+    if (currentIdx < questions.length - 1) {
+      setCurrentIdx(currentIdx + 1);
+    } else {
+      setFinished(true);
+    }
+  };
+
+  if (finished) {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+        <h1 style={{ fontSize: '4rem', marginBottom: '16px' }}>{score >= 4 ? '🏆' : '👏'}</h1>
+        <h2>Test Terminé !</h2>
+        <p style={{ margin: '16px 0', fontSize: '1.2rem' }}>Votre score : <strong style={{ color: 'var(--primary)' }}>{score} / {questions.length}</strong></p>
+        <button className="btn btn-primary" onClick={onComplete} style={{ width: '100%', marginTop: '24px' }}>Retour au Profil</button>
+      </div>
+    );
+  }
+
+  if (questions.length === 0) return <div>Chargement du test...</div>;
+
+  const q = questions[currentIdx];
+
+  return (
+    <div>
+      <h2 style={{ marginBottom: '8px' }}>Test du Jour {activeDay}</h2>
+      <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>Question {currentIdx + 1} / {questions.length}</p>
+      
+      <div className="card" style={{ marginBottom: '24px', padding: '40px 20px', textAlign: 'center', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+        <h3 style={{ fontSize: '1.4rem', margin: '0', color: '#1E293B' }}>{q.question}</h3>
+      </div>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
+        {q.options.map((opt, i) => (
+          <button 
+            key={i}
+            onClick={() => handleOptionClick(opt)}
+            style={{ 
+              padding: '16px', 
+              background: 'white', 
+              border: '2px solid var(--border-color)', 
+              borderRadius: '12px',
+              fontSize: '1rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              textAlign: 'left',
+              fontWeight: '500',
+              color: 'var(--text-main)'
+            }}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
