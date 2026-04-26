@@ -101,29 +101,54 @@ function App() {
     setActiveTab('profile');
   };
 
-  const generateAdvancedContent = async (day, dayTitle) => {
+  const generateAdvancedContent = async (day, dayTitle, intermediateData) => {
     if (advancedContent[day] || isGeneratingAdvanced) return;
     setIsGeneratingAdvanced(true);
+
+    // Determine target level band
+    const levelMap = {
+      'A1': 'A1/A2', 'A2': 'A1/A2',
+      'B1': 'B1/B2', 'B2': 'B1/B2',
+      'C1': 'C1/C2', 'C2': 'C1/C2'
+    };
+    const baseLevel = userLevel?.split(' ')?.[0] || 'B1';
+    const levelBand = levelMap[baseLevel] || 'B1/B2';
+
+    // Summarize intermediate vocab to avoid repetition
+    const intermediateWords = (intermediateData?.vocab || []).map(v => v.word).join(', ');
+    const intermediateGrammar = intermediateData?.grammarTitle || '';
+
     try {
-      const prompt = `Generate ADVANCED English content for a web engineer — Day ${day}: "${dayTitle}".
-      This must be HARDER than intermediate level. Use complex grammar, idiomatic expressions, and challenging vocabulary.
-      Return ONLY a valid JSON object with this exact format:
+      const prompt = `You are an expert English teacher. Generate ADVANCED content for a Web Engineer at CEFR level ${levelBand}, Day ${day}: "${dayTitle}".
+
+      CONTEXT (Intermediate content already covered):
+      - Vocabulary already studied: ${intermediateWords}
+      - Grammar already studied: ${intermediateGrammar}
+
+      YOUR TASK: Create harder content within the SAME ${levelBand} level band — do NOT go to a higher level.
+      - Use the SAME thematic topic (${dayTitle}) but go DEEPER
+      - New vocabulary: more nuanced, less common synonyms and collocations (NEVER repeat the intermediate words)
+      - Grammar: choose a MORE COMPLEX rule within ${levelBand} (e.g., inversion, mixed conditionals, advanced passive, discourse markers)
+      - Expressions: more idiomatic, less textbook (professional register)
+      - Dialogue: more natural, shows complex negotiation or technical discussion
+
+      Return ONLY valid JSON:
       {
-        "vocab": [ { "word": "advanced english word/idiom", "translation": "french translation", "category": "category", "example": "complex professional sentence", "exampleTranslation": "french translation" } ],
-        "grammarTitle": "Advanced Grammar Topic (e.g. Conditionals, Inversion, Subjunctive)",
-        "grammarDesc": "Detailed description when to use it",
-        "grammarSyntax": "Syntax structure",
-        "grammarRules": [ { "title": "Rule name", "example": "Complex example sentence", "translation": "French translation" } ],
-        "expressions": [ { "phrase": "advanced workplace expression", "meaning": "meaning", "example": "full sentence using it", "translation": "french translation" } ],
-        "dialogue": [ { "speaker": "A", "text": "complex english sentence", "translation": "french translation" } ]
+        "vocab": [ { "word": "...", "translation": "...", "category": "...", "example": "complex professional sentence", "exampleTranslation": "..." } ],
+        "grammarTitle": "...",
+        "grammarDesc": "...",
+        "grammarSyntax": "...",
+        "grammarRules": [ { "title": "...", "example": "...", "translation": "..." } ],
+        "expressions": [ { "phrase": "...", "meaning": "...", "example": "full sentence", "translation": "..." } ],
+        "dialogue": [ { "speaker": "A", "text": "...", "translation": "..." } ]
       }
-      Ensure: 15 words in vocab (C1/C2 level), 4 grammarRules, 10 expressions, 8 dialogue lines.`;
+      Ensure: exactly 15 vocab words, 4 grammarRules, exactly 10 expressions, 8 dialogue lines.`;
 
       const response = await fetch('/api/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: 'You are a pure JSON generator. Return only valid JSON.' }] },
+          systemInstruction: { parts: [{ text: 'You are a pure JSON generator. Return only valid JSON, no extra text.' }] },
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { responseMimeType: 'application/json' }
         })
@@ -272,6 +297,7 @@ function App() {
           advancedContent={advancedContent}
           generateAdvancedContent={generateAdvancedContent}
           isGeneratingAdvanced={isGeneratingAdvanced}
+          userLevel={userLevel}
         />}
         {activeTab === 'dialogues' && <DialoguesView />}
         {activeTab === 'expressions' && <ExpressionsView />}
@@ -604,7 +630,7 @@ function CoachView() {
   );
 }
 
-function LearnView({ activeDay, appContent, setActiveTab, dayTestLevel, setCurrentTestLevel, advancedContent, generateAdvancedContent, isGeneratingAdvanced }) {
+function LearnView({ activeDay, appContent, setActiveTab, dayTestLevel, setCurrentTestLevel, advancedContent, generateAdvancedContent, isGeneratingAdvanced, userLevel }) {
   const [showAllVocab, setShowAllVocab] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState('intermediate');
   const [vocabDone, setVocabDone] = useState(false);
@@ -626,7 +652,7 @@ function LearnView({ activeDay, appContent, setActiveTab, dayTestLevel, setCurre
   const handleSelectAdvanced = () => {
     const baseData = appContent[activeDay] || appContent[1];
     if (!advancedContent[activeDay]) {
-      generateAdvancedContent(activeDay, baseData.title);
+      generateAdvancedContent(activeDay, baseData.title, baseData);
     }
     setSelectedLevel('advanced');
     setVocabDone(false);
@@ -704,7 +730,7 @@ function LearnView({ activeDay, appContent, setActiveTab, dayTestLevel, setCurre
             transition: 'all 0.2s'
           }}
         >
-          🔴 Advanced {!(dayLevel === 'intermediate' || dayLevel === 'advanced') ? '🔒' : ''}
+          🔴 Advanced {!(dayLevel === 'intermediate' || dayLevel === 'advanced') ? '🔒' : (userLevel ? `· ${userLevel.split(' ')[0]}+` : '')}
         </button>
       </div>
 
@@ -712,7 +738,8 @@ function LearnView({ activeDay, appContent, setActiveTab, dayTestLevel, setCurre
       {selectedLevel === 'advanced' && isGeneratingAdvanced && (
         <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
           <div style={{ fontSize: '2rem', marginBottom: '12px' }}>✨</div>
-          <p>Generating your Advanced content with AI...</p>
+          <p style={{ fontWeight: '600' }}>Generating your Advanced {userLevel ? `(${userLevel.split(' ')[0]}+)` : ''} content with AI...</p>
+          <p style={{ fontSize: '0.85rem', marginTop: '8px' }}>Tailored specifically to your level. This may take a few seconds.</p>
         </div>
       )}
 
