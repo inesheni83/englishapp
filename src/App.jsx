@@ -285,12 +285,39 @@ function CoachView() {
   const [loading, setLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
 
-  const speak = (text) => {
+  const speak = async (text) => {
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.play();
+        return; // Success, skip native fallback
+      }
+    } catch (e) {
+      console.log('ElevenLabs TTS unavailable, using native fallback');
+    }
+
+    // Native fallback
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'en-US';
-      utterance.rate = 0.9;
+      
+      const voices = window.speechSynthesis.getVoices();
+      const bestVoice = voices.find(v => v.lang.startsWith('en-US') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Premium'))) || voices.find(v => v.lang.startsWith('en'));
+      
+      if (bestVoice) {
+        utterance.voice = bestVoice;
+      }
+      
+      utterance.rate = 0.95;
+      utterance.pitch = 1.05;
       window.speechSynthesis.speak(utterance);
     }
   };
