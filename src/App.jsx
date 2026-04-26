@@ -15,6 +15,8 @@ function App() {
   const [onboardingStep, setOnboardingStep] = useState('welcome');
   const [tempLevel, setTempLevel] = useState(null);
   const [unlockedDay, setUnlockedDay] = useState(1);
+  const [dayTestLevel, setDayTestLevel] = useState({}); // { [day]: 'intermediate' | 'advanced' }
+  const [currentTestLevel, setCurrentTestLevel] = useState('intermediate');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -45,6 +47,9 @@ function App() {
                 setUnlockedDay(data.generated_content.unlockedDay);
               } else {
                 setUnlockedDay(data.active_day || 1);
+              }
+              if (data.generated_content.dayTestLevel) {
+                setDayTestLevel(data.generated_content.dayTestLevel);
               }
               const validKeys = Object.keys(data.generated_content).map(Number).filter(n => !isNaN(n));
               const maxDay = validKeys.length > 0 ? Math.max(7, ...validKeys) : 7;
@@ -207,20 +212,32 @@ function App() {
       <main className="container">
         {activeTab === 'home' && <HomeView activeDay={activeDay} setActiveDay={handleSetActiveDay} setActiveTab={setActiveTab} totalDays={totalDays} generateNextWeek={generateNextWeek} isGenerating={isGenerating} unlockedDay={unlockedDay} />}
         {activeTab === 'coach' && <CoachView />}
-        {activeTab === 'learn' && <LearnView activeDay={activeDay} appContent={appContent} setActiveTab={setActiveTab} />}
+        {activeTab === 'learn' && <LearnView activeDay={activeDay} appContent={appContent} setActiveTab={setActiveTab} dayTestLevel={dayTestLevel} setCurrentTestLevel={setCurrentTestLevel} />}
         {activeTab === 'dialogues' && <DialoguesView />}
         {activeTab === 'expressions' && <ExpressionsView />}
         {activeTab === 'profile' && <ProfileView activeDay={activeDay} session={session} setActiveTab={setActiveTab} userLevel={userLevel} />}
-        {activeTab === 'test' && <TestView activeDay={activeDay} appContent={appContent} onComplete={(success) => {
-          if (success && activeDay === unlockedDay) {
-            const nextDay = activeDay + 1;
-            setUnlockedDay(nextDay);
-            const updatedContent = { ...generatedContent, unlockedDay: nextDay };
-            setGeneratedContent(updatedContent);
-            updateProgress(nextDay, updatedContent);
-            setActiveDay(nextDay);
+        {activeTab === 'test' && <TestView activeDay={activeDay} appContent={appContent} testLevel={currentTestLevel} onComplete={(success) => {
+          if (success) {
+            if (currentTestLevel === 'advanced' && activeDay === unlockedDay) {
+              // Advanced passed → unlock next day
+              const nextDay = activeDay + 1;
+              const newDayTestLevel = { ...dayTestLevel, [activeDay]: 'advanced' };
+              setDayTestLevel(newDayTestLevel);
+              setUnlockedDay(nextDay);
+              const updatedContent = { ...generatedContent, unlockedDay: nextDay, dayTestLevel: newDayTestLevel };
+              setGeneratedContent(updatedContent);
+              updateProgress(nextDay, updatedContent);
+              setActiveDay(nextDay);
+            } else if (currentTestLevel === 'intermediate') {
+              // Intermediate passed → mark it, but don't unlock next day
+              const newDayTestLevel = { ...dayTestLevel, [activeDay]: 'intermediate' };
+              setDayTestLevel(newDayTestLevel);
+              const updatedContent = { ...generatedContent, dayTestLevel: newDayTestLevel };
+              setGeneratedContent(updatedContent);
+              updateProgress(activeDay, updatedContent);
+            }
           }
-          setActiveTab('profile');
+          setActiveTab('learn');
         }} />}
         {activeTab === 'placement' && <PlacementTestView onComplete={handleUpdateLevel} />}
       </main>
@@ -527,7 +544,7 @@ function CoachView() {
   );
 }
 
-function LearnView({ activeDay, appContent, setActiveTab }) {
+function LearnView({ activeDay, appContent, setActiveTab, dayTestLevel, setCurrentTestLevel }) {
   const [showAllVocab, setShowAllVocab] = useState(false);
   const [vocabDone, setVocabDone] = useState(false);
   const [grammarDone, setGrammarDone] = useState(false);
@@ -536,6 +553,14 @@ function LearnView({ activeDay, appContent, setActiveTab }) {
   const [openSection, setOpenSection] = useState({ vocab: false, grammar: false, expressions: false, dialogue: false });
 
   const toggleSection = (key) => setOpenSection(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const allDone = vocabDone && grammarDone && expressionsDone && dialogueDone;
+  const dayLevel = dayTestLevel?.[activeDay]; // null | 'intermediate' | 'advanced'
+
+  const handleStartTest = (level) => {
+    setCurrentTestLevel(level);
+    setActiveTab('test');
+  };
 
   useEffect(() => {
     setVocabDone(false);
@@ -823,14 +848,41 @@ function LearnView({ activeDay, appContent, setActiveTab }) {
       </div>
 
       <div style={{ marginTop: '32px', marginBottom: '32px' }}>
-        <button 
-          className="btn btn-primary" 
-          style={{ width: '100%', padding: '16px', fontSize: '1.1rem', opacity: (vocabDone && grammarDone && expressionsDone && dialogueDone) ? 1 : 0.5, cursor: (vocabDone && grammarDone && expressionsDone && dialogueDone) ? 'pointer' : 'not-allowed' }} 
-          disabled={!(vocabDone && grammarDone && expressionsDone && dialogueDone)}
-          onClick={() => setActiveTab('test')}
-        >
-          {vocabDone && grammarDone && expressionsDone && dialogueDone ? "Passer le Test du Jour 🏆" : "Terminez la leçon pour débloquer le test"}
-        </button>
+        {/* Show level picker once all sections are done */}
+        {dayLevel === 'advanced' ? (
+          <div style={{ textAlign: 'center', padding: '16px', background: '#ECFDF5', borderRadius: '12px', border: '2px solid #10B981' }}>
+            <div style={{ fontSize: '2rem', marginBottom: '8px' }}>🏆</div>
+            <div style={{ fontWeight: '700', color: '#065F46', fontSize: '1.1rem' }}>Day {activeDay} Fully Completed!</div>
+            <div style={{ fontSize: '0.9rem', color: '#047857', marginTop: '4px' }}>Next day unlocked.</div>
+          </div>
+        ) : !allDone ? (
+          <button className="btn btn-primary" style={{ width: '100%', padding: '16px', fontSize: '1.1rem', opacity: 0.5, cursor: 'not-allowed' }} disabled>
+            Terminez la leçon pour débloquer le test
+          </button>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <p style={{ textAlign: 'center', fontWeight: '600', color: 'var(--text-main)', marginBottom: '4px' }}>Choose your challenge level:</p>
+            <button
+              className="btn btn-outline"
+              style={{ width: '100%', padding: '16px', fontSize: '1rem', borderColor: '#F59E0B', color: '#B45309', background: '#FFFBEB', opacity: dayLevel === 'intermediate' ? 0.5 : 1, position: 'relative' }}
+              onClick={() => !dayLevel && handleStartTest('intermediate')}
+              disabled={!!dayLevel}
+            >
+              <div style={{ fontWeight: '700' }}>🟡 Intermediate Test</div>
+              <div style={{ fontSize: '0.8rem', marginTop: '2px' }}>Translation → Word selection · Does NOT unlock next day</div>
+              {dayLevel === 'intermediate' && <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '1.2rem' }}>✅</span>}
+            </button>
+            <button
+              className="btn btn-primary"
+              style={{ width: '100%', padding: '16px', fontSize: '1rem', background: dayLevel === 'intermediate' ? 'var(--primary)' : '#94A3B8', borderColor: dayLevel === 'intermediate' ? 'var(--primary)' : '#94A3B8', cursor: dayLevel === 'intermediate' ? 'pointer' : 'not-allowed' }}
+              onClick={() => dayLevel === 'intermediate' && handleStartTest('advanced')}
+              disabled={dayLevel !== 'intermediate'}
+            >
+              <div style={{ fontWeight: '700' }}>🔴 Advanced Test {dayLevel !== 'intermediate' && '🔒'}</div>
+              <div style={{ fontSize: '0.8rem', marginTop: '2px' }}>Fill-in grammar + expressions · Unlocks next day ✨</div>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -895,7 +947,7 @@ function ProfileView({ activeDay, session, setActiveTab, userLevel }) {
   );
 }
 
-function TestView({ activeDay, appContent, onComplete }) {
+function TestView({ activeDay, appContent, testLevel, onComplete }) {
   const [questions, setQuestions] = useState([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [score, setScore] = useState(0);
@@ -937,24 +989,43 @@ function TestView({ activeDay, appContent, onComplete }) {
   useEffect(() => {
     const dayData = appContent[activeDay];
     if (!dayData || !dayData.vocab) return;
-
     const vocab = dayData.vocab;
-    const shuffled = [...vocab].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, 10); // 10 questions
-    
-    const generatedQs = selected.map(wordObj => {
-      const others = vocab.filter(v => v.word !== wordObj.word);
-      const wrongOptions = [...others].sort(() => 0.5 - Math.random()).slice(0, 3).map(v => v.word);
-      const options = [...wrongOptions, wordObj.word].sort(() => 0.5 - Math.random());
-      
-      return {
-        question: `Select the English word for: "${wordObj.translation}"`,
-        options: options,
-        answer: wordObj.word
-      };
-    });
-    setQuestions(generatedQs);
-  }, [activeDay, appContent]);
+
+    let generatedQs;
+    if (testLevel === 'advanced') {
+      // Advanced: Mix of grammar fill-in + word-in-context questions
+      const grammarQs = (dayData.grammarRules || []).slice(0, 4).map(rule => {
+        const sentence = rule.example.replace(/["]/g, '');
+        const blank = sentence.replace(rule.title.split('.')[1]?.trim().split(' ')[0] || 'the', '___');
+        const wrongWords = vocab.slice(0, 3).map(v => v.word);
+        const opts = [...new Set([...wrongWords, sentence])].slice(0, 4).sort(() => 0.5 - Math.random());
+        return { question: `Complete: ${blank}`, options: opts, answer: sentence };
+      });
+      const shuffled = [...vocab].sort(() => 0.5 - Math.random()).slice(0, 6);
+      const vocabContextQs = shuffled.map(wordObj => {
+        const others = vocab.filter(v => v.word !== wordObj.word);
+        const wrong = [...others].sort(() => 0.5 - Math.random()).slice(0, 3).map(v => v.translation);
+        const opts = [...wrong, wordObj.translation].sort(() => 0.5 - Math.random());
+        return {
+          question: `Context: "${wordObj.example || wordObj.word}" — what does "${wordObj.word}" mean?`,
+          options: opts,
+          answer: wordObj.translation
+        };
+      });
+      generatedQs = [...grammarQs, ...vocabContextQs].sort(() => 0.5 - Math.random()).slice(0, 10);
+    } else {
+      // Intermediate: Translation → English word (original)
+      const shuffled = [...vocab].sort(() => 0.5 - Math.random());
+      const selected = shuffled.slice(0, 10);
+      generatedQs = selected.map(wordObj => {
+        const others = vocab.filter(v => v.word !== wordObj.word);
+        const wrongOptions = [...others].sort(() => 0.5 - Math.random()).slice(0, 3).map(v => v.word);
+        const options = [...wrongOptions, wordObj.word].sort(() => 0.5 - Math.random());
+        return { question: `Select the English word for: "${wordObj.translation}"`, options, answer: wordObj.word };
+      });
+    }
+    setQuestions(generatedQs.filter(q => q.options.length === 4));
+  }, [activeDay, appContent, testLevel]);
 
   const handleOptionClick = (option) => {
     if (option === questions[currentIdx].answer) {
@@ -990,10 +1061,13 @@ function TestView({ activeDay, appContent, onComplete }) {
 
   if (finished) {
     const success = score >= 8;
+    const isAdvanced = testLevel === 'advanced';
     return (
       <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-        <h1 style={{ fontSize: '4rem', marginBottom: '16px' }}>{success ? '🏆' : '👏'}</h1>
-        <h2>{success ? 'Quiz Completed & Passed!' : 'Quiz Finished (Need 8/10 to pass)'}</h2>
+        <h1 style={{ fontSize: '4rem', marginBottom: '16px' }}>{success ? (isAdvanced ? '🏆' : '🎯') : '👏'}</h1>
+        <h2>{success ? (isAdvanced ? 'Advanced Passed! Next day unlocked! 🔓' : 'Intermediate Passed!') : 'Not quite! (Need 8/10)'}</h2>
+        {success && isAdvanced && <p style={{ margin: '8px 0', color: '#10B981', fontWeight: '600' }}>You can now access the next day!</p>}
+        {success && !isAdvanced && <p style={{ margin: '8px 0', color: '#F59E0B', fontWeight: '600' }}>Now take the Advanced Test to unlock the next day.</p>}
         <p style={{ margin: '16px 0', fontSize: '1.2rem' }}>Your score: <strong style={{ color: 'var(--primary)' }}>{score} / {questions.length}</strong></p>
         <button className="btn btn-primary" onClick={() => onComplete(success)} style={{ width: '100%', marginTop: '24px' }}>Continue</button>
       </div>
@@ -1007,7 +1081,10 @@ function TestView({ activeDay, appContent, onComplete }) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ margin: 0 }}>Day {activeDay} Quiz</h2>
+        <div>
+          <h2 style={{ margin: 0 }}>Day {activeDay} — {testLevel === 'advanced' ? '🔴 Advanced' : '🟡 Intermediate'}</h2>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>{testLevel === 'advanced' ? 'Pass to unlock next day' : 'Pass to unlock Advanced'}</div>
+        </div>
         <div style={{ fontSize: '1.2rem', color: '#EF4444', fontWeight: 'bold' }}>
           {'❤️ '.repeat(lives)}{'🤍 '.repeat(3 - lives)}
         </div>
