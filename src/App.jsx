@@ -1807,19 +1807,32 @@ function InterviewView({ userLevel, session }) {
   };
 
   const callGemini = async (prompt) => {
-    const res = await fetch('/api/gemini', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: 'You are a pure JSON generator. Return only valid JSON, no markdown.' }] },
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json' }
-      })
-    });
-    const data = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-    const match = text.match(/\{[\s\S]*\}/);
-    return match ? JSON.parse(match[0]) : null;
+    try {
+      const res = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: 'You are a pure JSON generator. Return only valid JSON, no markdown.' }] },
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json' }
+        })
+      });
+
+      if (res.status === 429) {
+        throw new Error('RATE_LIMIT');
+      }
+
+      if (!res.ok) {
+        throw new Error(`API_ERROR_${res.status}`);
+      }
+
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      const match = text.match(/\{[\s\S]*\}/);
+      return match ? JSON.parse(match[0]) : null;
+    } catch (err) {
+      throw err;
+    }
   };
 
   const generateInterview = async () => {
@@ -1868,6 +1881,11 @@ function InterviewView({ userLevel, session }) {
     } catch (e) {
       console.error(e);
       setStage('setup');
+      if (e.message === 'RATE_LIMIT') {
+        alert("Too many requests (Gemini Rate Limit). Please wait about 30-60 seconds before trying again.");
+      } else {
+        alert("An error occurred during generation. Please try again.");
+      }
     }
   };
 
@@ -1942,6 +1960,11 @@ function InterviewView({ userLevel, session }) {
     } catch (e) {
       console.error(e);
       setStage('interview');
+      if (e.message === 'RATE_LIMIT') {
+        alert("Too many requests (Gemini Rate Limit). Your answers are saved, please wait 60 seconds and click 'Finish' again.");
+      } else {
+        alert("An error occurred during evaluation. Please try again.");
+      }
     }
   };
 
