@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Home, MessageCircle, BookOpen, User, Play, Mic, Send, BookMarked, BrainCircuit, Mic2, Star, Volume2, ChevronDown } from 'lucide-react';
+import { Home, MessageCircle, BookOpen, User, Play, Mic, Send, BookMarked, BrainCircuit, Mic2, Star, Volume2, ChevronDown, Briefcase, ChevronRight, Award, ThumbsUp, RefreshCw } from 'lucide-react';
 import './index.css';
 import { dailyContent, dialogues, discussionExpressions } from './data.js';
 import { supabase } from './supabaseClient';
@@ -358,6 +358,7 @@ function App() {
           setActiveTab('learn');
         }} />}
         {activeTab === 'placement' && <PlacementTestView onComplete={handleUpdateLevel} />}
+        {activeTab === 'interview' && <InterviewView userLevel={userLevel} session={session} />}
       </main>
 
       <nav className="bottom-nav">
@@ -372,6 +373,10 @@ function App() {
         <button className={`nav-item ${activeTab === 'coach' ? 'active' : ''}`} onClick={() => setActiveTab('coach')}>
           <MessageCircle size={24} />
           <span>AI Coach</span>
+        </button>
+        <button className={`nav-item ${activeTab === 'interview' ? 'active' : ''}`} onClick={() => setActiveTab('interview')}>
+          <Briefcase size={24} />
+          <span>Interview</span>
         </button>
         <button className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
           <User size={24} />
@@ -1749,3 +1754,436 @@ function AuthView({ tempLevel }) {
 }
 
 export default App;
+
+// ============================================================
+// INTERVIEW SIMULATION VIEW
+// ============================================================
+function InterviewView({ userLevel, session }) {
+  const [stage, setStage] = useState('setup'); // setup | generating | interview | evaluating | feedback
+  const [jobTitle, setJobTitle] = useState('');
+  const [company, setCompany] = useState('');
+  const [interviewType, setInterviewType] = useState('mixed');
+  const [questions, setQuestions] = useState([]);
+  const [currentQ, setCurrentQ] = useState(0);
+  const [answers, setAnswers] = useState([]);
+  const [currentAnswer, setCurrentAnswer] = useState('');
+  const [feedback, setFeedback] = useState(null);
+  const [openIdx, setOpenIdx] = useState(null);
+
+  const levelBand = (() => {
+    const base = userLevel?.split(' ')?.[0] || 'B1';
+    const map = { A1: 'A1/A2', A2: 'A1/A2', B1: 'B1/B2', B2: 'B1/B2', C1: 'C1/C2', C2: 'C1/C2' };
+    return map[base] || 'B1/B2';
+  })();
+
+  const callGemini = async (prompt) => {
+    const res = await fetch('/api/gemini', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: 'You are a pure JSON generator. Return only valid JSON, no markdown.' }] },
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: 'application/json' }
+      })
+    });
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    const match = text.match(/\{[\s\S]*\}/);
+    return match ? JSON.parse(match[0]) : null;
+  };
+
+  const generateInterview = async () => {
+    if (!jobTitle.trim() || !company.trim()) return;
+    setStage('generating');
+    try {
+      const typeDesc = {
+        hr: 'HR / Soft skills (motivation, teamwork, values)',
+        technical: 'Technical (skills, tools, problem-solving, coding practices)',
+        mixed: 'Mixed (HR + Technical — realistic full interview)'
+      }[interviewType];
+
+      const prompt = `You are a professional HR interviewer at ${company}. Generate a realistic job interview for a "${jobTitle}" position.
+      
+      Interview type: ${typeDesc}
+      Candidate level: English CEFR ${levelBand} (adjust question vocabulary and complexity to this level)
+      
+      Generate exactly 6 interview questions. Questions must be professional, specific to "${jobTitle}" at "${company}", realistic, and progressively harder.
+      
+      Return ONLY valid JSON:
+      {
+        "interviewerName": "First name of the interviewer",
+        "companyContext": "One sentence describing ${company} for context",
+        "questions": [
+          {
+            "id": 1,
+            "category": "Introduction | Motivation | Technical | Behavioral | Situational | Closing",
+            "question": "The full interview question in English",
+            "hint": "Short tip in French to help the candidate structure their answer"
+          }
+        ]
+      }`;
+
+      const result = await callGemini(prompt);
+      if (result?.questions?.length) {
+        setQuestions(result.questions);
+        setAnswers([]);
+        setCurrentQ(0);
+        setCurrentAnswer('');
+        setStage('interview');
+        window._interviewMeta = { interviewerName: result.interviewerName, companyContext: result.companyContext };
+      } else {
+        setStage('setup');
+        alert('Generation failed. Please try again.');
+      }
+    } catch (e) {
+      console.error(e);
+      setStage('setup');
+    }
+  };
+
+  const submitAnswer = () => {
+    if (!currentAnswer.trim()) return;
+    const newAnswers = [...answers, { questionId: questions[currentQ].id, question: questions[currentQ].question, answer: currentAnswer.trim() }];
+    setAnswers(newAnswers);
+    setCurrentAnswer('');
+    if (currentQ < questions.length - 1) {
+      setCurrentQ(currentQ + 1);
+    } else {
+      generateFeedback(newAnswers);
+    }
+  };
+
+  const generateFeedback = async (allAnswers) => {
+    setStage('evaluating');
+    try {
+      const answersText = allAnswers.map((a, i) =>
+        `Q${i + 1}: ${a.question}\nCandidate answer: "${a.answer}"`
+      ).join('\n\n');
+
+      const prompt = `You are a senior HR evaluator at ${company} interviewing a "${jobTitle}" candidate.
+      The candidate speaks English at CEFR level ${levelBand}.
+      
+      Evaluate the following interview Q&A. Be professional, constructive, and adapt feedback to their English level.
+      
+      ${answersText}
+      
+      Return ONLY valid JSON:
+      {
+        "overallScore": 72,
+        "overallComment": "2-3 sentences global English feedback in French",
+        "strengths": ["strength 1 in French", "strength 2 in French"],
+        "improvements": ["improvement 1 in French", "improvement 2 in French"],
+        "answers": [
+          {
+            "questionId": 1,
+            "score": 75,
+            "englishFeedback": "Specific feedback on English grammar, vocabulary, fluency in French (2-3 sentences)",
+            "contentFeedback": "Feedback on the content/substance of the answer in French (1-2 sentences)",
+            "modelAnswer": "A complete, ideal English answer to this question (3-5 sentences, at ${levelBand} level)"
+          }
+        ]
+      }`;
+
+      const result = await callGemini(prompt);
+      if (result) {
+        setFeedback(result);
+        setStage('feedback');
+      } else {
+        setStage('interview');
+        alert('Feedback generation failed. Please try again.');
+      }
+    } catch (e) {
+      console.error(e);
+      setStage('interview');
+    }
+  };
+
+  const restart = () => {
+    setStage('setup');
+    setJobTitle('');
+    setCompany('');
+    setQuestions([]);
+    setAnswers([]);
+    setCurrentAnswer('');
+    setFeedback(null);
+    setCurrentQ(0);
+  };
+
+  const meta = window._interviewMeta || {};
+  const scoreColor = (s) => s >= 75 ? '#10B981' : s >= 50 ? '#F59E0B' : '#EF4444';
+
+  // ─── SETUP ───────────────────────────────────────────────────────────────────
+  if (stage === 'setup') return (
+    <div>
+      <h1 style={{ marginBottom: '4px' }}>🎙️ Interview Simulator</h1>
+      <p style={{ color: 'var(--text-muted)', marginBottom: '28px', fontSize: '0.9rem' }}>
+        Practise a real job interview with AI. Get personalised feedback on your English and your answers.
+      </p>
+
+      <div className="card" style={{ marginBottom: '16px' }}>
+        <h2 style={{ fontSize: '1rem', marginBottom: '16px', color: 'var(--text-main)' }}>📋 Interview Setup</h2>
+
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontWeight: '600', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Your Job Title / Role
+          </label>
+          <input
+            type="text"
+            value={jobTitle}
+            onChange={e => setJobTitle(e.target.value)}
+            placeholder="e.g. Senior React Developer, DevOps Engineer, Product Manager..."
+            style={{ width: '100%', padding: '12px 14px', border: '2px solid var(--border-color)', borderRadius: '10px', fontSize: '1rem', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+            onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+            onBlur={e => e.target.style.borderColor = 'var(--border-color)'}
+          />
+        </div>
+
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontWeight: '600', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Target Company
+          </label>
+          <input
+            type="text"
+            value={company}
+            onChange={e => setCompany(e.target.value)}
+            placeholder="e.g. Google, Spotify, a Paris startup, BNP Paribas..."
+            style={{ width: '100%', padding: '12px 14px', border: '2px solid var(--border-color)', borderRadius: '10px', fontSize: '1rem', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+            onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+            onBlur={e => e.target.style.borderColor = 'var(--border-color)'}
+          />
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', fontWeight: '600', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Interview Type
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+            {[
+              { key: 'hr', label: '🤝 HR', desc: 'Soft skills & motivation' },
+              { key: 'technical', label: '⚙️ Technical', desc: 'Skills & problem solving' },
+              { key: 'mixed', label: '🎯 Mixed', desc: 'Full realistic interview' }
+            ].map(t => (
+              <button key={t.key} onClick={() => setInterviewType(t.key)} style={{
+                padding: '10px 8px', borderRadius: '10px', border: `2px solid ${interviewType === t.key ? 'var(--primary)' : 'var(--border-color)'}`,
+                background: interviewType === t.key ? '#EEF2FF' : 'white', cursor: 'pointer', transition: 'all 0.2s'
+              }}>
+                <div style={{ fontWeight: '700', fontSize: '0.85rem', color: interviewType === t.key ? 'var(--primary)' : 'var(--text-main)' }}>{t.label}</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>{t.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ padding: '12px', background: '#F0FDF4', borderRadius: '8px', border: '1px solid #BBF7D0', marginBottom: '16px', fontSize: '0.85rem', color: '#065F46' }}>
+          🎯 Adapted to your level: <strong>{userLevel || 'B1'}</strong> — Questions and feedback will match your English proficiency.
+        </div>
+
+        <button
+          onClick={generateInterview}
+          disabled={!jobTitle.trim() || !company.trim()}
+          className="btn btn-primary"
+          style={{ width: '100%', padding: '16px', fontSize: '1rem', opacity: (!jobTitle.trim() || !company.trim()) ? 0.5 : 1, cursor: (!jobTitle.trim() || !company.trim()) ? 'not-allowed' : 'pointer' }}
+        >
+          🚀 Start Interview Simulation
+        </button>
+      </div>
+    </div>
+  );
+
+  // ─── GENERATING ──────────────────────────────────────────────────────────────
+  if (stage === 'generating') return (
+    <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+      <div style={{ fontSize: '3rem', marginBottom: '16px', animation: 'pulse 1.5s infinite' }}>🤖</div>
+      <h2 style={{ marginBottom: '8px' }}>Preparing your interview...</h2>
+      <p style={{ color: 'var(--text-muted)' }}>Generating real questions for <strong>{jobTitle}</strong> at <strong>{company}</strong></p>
+    </div>
+  );
+
+  // ─── EVALUATING ──────────────────────────────────────────────────────────────
+  if (stage === 'evaluating') return (
+    <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+      <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📊</div>
+      <h2 style={{ marginBottom: '8px' }}>Analysing your answers...</h2>
+      <p style={{ color: 'var(--text-muted)' }}>Your English and content are being evaluated by AI.</p>
+    </div>
+  );
+
+  // ─── INTERVIEW ───────────────────────────────────────────────────────────────
+  if (stage === 'interview') {
+    const q = questions[currentQ];
+    const progress = ((currentQ) / questions.length) * 100;
+    return (
+      <div>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div>
+            <h1 style={{ fontSize: '1.1rem', margin: 0 }}>Interview: {jobTitle}</h1>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>@ {company}</div>
+          </div>
+          <div style={{ textAlign: 'right', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            Question <strong>{currentQ + 1}</strong> / {questions.length}
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div style={{ height: '6px', background: '#E2E8F0', borderRadius: '3px', marginBottom: '20px' }}>
+          <div style={{ height: '100%', width: `${progress}%`, background: 'var(--primary)', borderRadius: '3px', transition: 'width 0.4s ease' }} />
+        </div>
+
+        {/* Category badge */}
+        <div style={{ marginBottom: '12px' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--primary)', background: '#EEF2FF', padding: '3px 10px', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            {q.category}
+          </span>
+        </div>
+
+        {/* Interviewer bubble */}
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', alignItems: 'flex-start' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'linear-gradient(135deg, #4F46E5, #7C3AED)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '1.1rem', flexShrink: 0 }}>
+            {(meta.interviewerName || 'AI').charAt(0)}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: '600' }}>
+              {meta.interviewerName || 'Interviewer'} · {company}
+            </div>
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '0 12px 12px 12px', padding: '14px 16px', fontSize: '1rem', lineHeight: '1.6', color: 'var(--text-main)', fontWeight: '500' }}>
+              {q.question}
+            </div>
+            {q.hint && (
+              <div style={{ marginTop: '8px', fontSize: '0.8rem', color: '#B45309', background: '#FFFBEB', padding: '6px 10px', borderRadius: '6px', border: '1px solid #FDE68A' }}>
+                💡 {q.hint}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Previous answers (mini recap) */}
+        {answers.length > 0 && (
+          <div style={{ marginBottom: '16px', maxHeight: '120px', overflowY: 'auto', background: '#F8FAFC', borderRadius: '8px', padding: '10px 12px' }}>
+            {answers.slice(-2).map((a, i) => (
+              <div key={i} style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                <strong>Q{answers.length - 1 + i}:</strong> {a.answer.substring(0, 80)}{a.answer.length > 80 ? '...' : ''}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Answer input */}
+        <div style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', fontWeight: '600', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+            Your answer (in English):
+          </label>
+          <textarea
+            value={currentAnswer}
+            onChange={e => setCurrentAnswer(e.target.value)}
+            placeholder="Type your answer in English..."
+            rows={5}
+            style={{ width: '100%', padding: '12px 14px', border: '2px solid var(--border-color)', borderRadius: '10px', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical', lineHeight: '1.5' }}
+            onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+            onBlur={e => e.target.style.borderColor = 'var(--border-color)'}
+          />
+        </div>
+
+        <button
+          onClick={submitAnswer}
+          disabled={!currentAnswer.trim()}
+          className="btn btn-primary"
+          style={{ width: '100%', padding: '14px', fontSize: '1rem', opacity: !currentAnswer.trim() ? 0.5 : 1, cursor: !currentAnswer.trim() ? 'not-allowed' : 'pointer' }}
+        >
+          {currentQ < questions.length - 1 ? `Next Question →` : `Finish & Get Feedback 🏁`}
+        </button>
+      </div>
+    );
+  }
+
+  // ─── FEEDBACK ────────────────────────────────────────────────────────────────
+  if (stage === 'feedback' && feedback) {
+    const [openIdx, setOpenIdx] = useState(null);
+    const overallColor = scoreColor(feedback.overallScore);
+    return (
+      <div>
+        <h1 style={{ marginBottom: '4px' }}>📊 Interview Feedback</h1>
+        <p style={{ color: 'var(--text-muted)', marginBottom: '20px', fontSize: '0.9rem' }}>{jobTitle} @ {company}</p>
+
+        {/* Overall score */}
+        <div className="card" style={{ textAlign: 'center', marginBottom: '16px', background: `linear-gradient(135deg, ${overallColor}15, ${overallColor}05)`, border: `2px solid ${overallColor}30` }}>
+          <div style={{ fontSize: '3.5rem', fontWeight: '900', color: overallColor, lineHeight: 1 }}>{feedback.overallScore}</div>
+          <div style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '12px' }}>/ 100</div>
+          <p style={{ fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: '1.6', margin: 0 }}>{feedback.overallComment}</p>
+        </div>
+
+        {/* Strengths & Improvements */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+          <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '10px', padding: '12px' }}>
+            <div style={{ fontWeight: '700', color: '#065F46', marginBottom: '8px', fontSize: '0.85rem' }}>✅ Strengths</div>
+            {(feedback.strengths || []).map((s, i) => (
+              <div key={i} style={{ fontSize: '0.82rem', color: '#047857', marginBottom: '4px' }}>• {s}</div>
+            ))}
+          </div>
+          <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: '10px', padding: '12px' }}>
+            <div style={{ fontWeight: '700', color: '#9A3412', marginBottom: '8px', fontSize: '0.85rem' }}>🔧 To Improve</div>
+            {(feedback.improvements || []).map((s, i) => (
+              <div key={i} style={{ fontSize: '0.82rem', color: '#C2410C', marginBottom: '4px' }}>• {s}</div>
+            ))}
+          </div>
+        </div>
+
+        {/* Per-question feedback */}
+        <h2 style={{ fontSize: '1rem', marginBottom: '12px' }}>Question-by-Question Analysis</h2>
+        {(feedback.answers || []).map((fa, idx) => {
+          const q = answers[idx];
+          const sc = fa.score || 0;
+          return (
+            <div key={idx} style={{ marginBottom: '10px', border: `1px solid ${scoreColor(sc)}30`, borderRadius: '12px', overflow: 'hidden' }}>
+              <button
+                onClick={() => setOpenIdx(openIdx === idx ? null : idx)}
+                style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', background: `${scoreColor(sc)}08`, border: 'none', cursor: 'pointer', textAlign: 'left' }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: '700', fontSize: '0.9rem', color: 'var(--text-main)', marginBottom: '2px' }}>Q{idx + 1}: {questions[idx]?.category}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{q?.question?.substring(0, 60)}...</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ fontWeight: '900', fontSize: '1.1rem', color: scoreColor(sc) }}>{sc}</div>
+                  <ChevronDown size={16} style={{ color: 'var(--text-muted)', transform: openIdx === idx ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
+                </div>
+              </button>
+              {openIdx === idx && (
+                <div style={{ padding: '14px 16px', borderTop: '1px solid #F1F5F9' }}>
+                  {/* User answer */}
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Your Answer</div>
+                    <div style={{ background: '#F8FAFC', padding: '10px 12px', borderRadius: '8px', fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.5', fontStyle: 'italic' }}>
+                      "{q?.answer}"
+                    </div>
+                  </div>
+                  {/* English feedback */}
+                  <div style={{ marginBottom: '10px', padding: '10px 12px', background: '#FFF7ED', borderRadius: '8px', borderLeft: '3px solid #F59E0B' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#B45309', marginBottom: '4px', textTransform: 'uppercase' }}>🗣️ English Feedback</div>
+                    <div style={{ fontSize: '0.88rem', color: '#92400E', lineHeight: '1.5' }}>{fa.englishFeedback}</div>
+                  </div>
+                  {/* Content feedback */}
+                  <div style={{ marginBottom: '10px', padding: '10px 12px', background: '#EFF6FF', borderRadius: '8px', borderLeft: '3px solid #3B82F6' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#1D4ED8', marginBottom: '4px', textTransform: 'uppercase' }}>💡 Content Feedback</div>
+                    <div style={{ fontSize: '0.88rem', color: '#1E3A5F', lineHeight: '1.5' }}>{fa.contentFeedback}</div>
+                  </div>
+                  {/* Model answer */}
+                  <div style={{ padding: '12px', background: '#F0FDF4', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#065F46', marginBottom: '6px', textTransform: 'uppercase' }}>✨ Model Answer (English)</div>
+                    <div style={{ fontSize: '0.9rem', color: '#047857', lineHeight: '1.6' }}>{fa.modelAnswer}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        <button onClick={restart} className="btn btn-outline" style={{ width: '100%', marginTop: '20px', padding: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+          <RefreshCw size={16} /> New Interview
+        </button>
+      </div>
+    );
+  }
+
+  return null;
+}
