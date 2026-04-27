@@ -19,6 +19,7 @@ function App() {
   const [currentTestLevel, setCurrentTestLevel] = useState('intermediate');
   const [advancedContent, setAdvancedContent] = useState({});
   const [isGeneratingAdvanced, setIsGeneratingAdvanced] = useState(false);
+  const [userProfile, setUserProfile] = useState({});
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -209,32 +210,60 @@ function App() {
   if (!session) {
     if (onboardingStep === 'welcome') {
       return (
-        <div className="auth-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', background: 'var(--bg-color)', textAlign: 'center' }}>
-          <div className="card" style={{ maxWidth: '400px', width: '100%', margin: '0 auto', padding: '40px 20px' }}>
-            <div className="logo-icon" style={{ width: '80px', height: '80px', fontSize: '2.5rem', margin: '0 auto 24px' }}>F</div>
-            <h1 style={{ fontSize: '2rem', marginBottom: '16px' }}>Welcome to Fluent</h1>
-            <p style={{ color: 'var(--text-muted)', marginBottom: '32px', fontSize: '1.1rem' }}>The AI English Coach exclusively designed for Web Engineers.</p>
-            
-            <div style={{ background: '#F8FAFC', padding: '24px', borderRadius: '12px', marginBottom: '32px', textAlign: 'left' }}>
-              <h3 style={{ marginBottom: '12px' }}>Why Fluent?</h3>
-              <ul style={{ paddingLeft: '20px', color: 'var(--text-muted)', margin: 0 }}>
-                <li style={{ marginBottom: '8px' }}>Tech-focused vocabulary</li>
-                <li style={{ marginBottom: '8px' }}>Ultra-realistic Voice AI Stand-ups</li>
-                <li>Daily Bite-sized Immersion</li>
-              </ul>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 50%, #2563EB 100%)', textAlign: 'center' }}>
+          <div style={{ maxWidth: '420px', width: '100%' }}>
+            {/* Logo */}
+            <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', fontSize: '2.5rem', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>F</div>
+            <h1 style={{ fontSize: '2.2rem', fontWeight: '900', color: 'white', marginBottom: '8px' }}>Welcome to Fluent</h1>
+            <p style={{ color: 'rgba(255,255,255,0.8)', marginBottom: '40px', fontSize: '1.1rem' }}>Your AI English Coach for Tech Professionals</p>
+
+            {/* Value propositions */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '40px' }}>
+              {[
+                { icon: '🎯', title: 'Personalized', desc: 'Adapted to your CEFR level' },
+                { icon: '🧑‍💻', title: 'Tech-Focused', desc: 'React, Docker, APIs vocabulary' },
+                { icon: '🎙️', title: 'Interview Sim', desc: 'Practice with real questions' },
+                { icon: '🤖', title: 'AI-Powered', desc: 'Gemini generates your content' }
+              ].map((item, i) => (
+                <div key={i} style={{ background: 'rgba(255,255,255,0.12)', borderRadius: '12px', padding: '16px', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)' }}>
+                  <div style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{item.icon}</div>
+                  <div style={{ fontWeight: '700', color: 'white', fontSize: '0.9rem' }}>{item.title}</div>
+                  <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem' }}>{item.desc}</div>
+                </div>
+              ))}
             </div>
 
-            <button className="btn btn-primary" style={{ width: '100%', fontSize: '1.1rem', padding: '16px' }} onClick={() => setOnboardingStep('placement')}>
-              Take Placement Test
+            <button
+              className="btn btn-primary"
+              style={{ width: '100%', fontSize: '1.1rem', padding: '18px', background: 'white', color: '#4F46E5', fontWeight: '800', borderRadius: '14px', border: 'none', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', cursor: 'pointer', marginBottom: '12px' }}
+              onClick={() => setOnboardingStep('quiz')}
+            >
+              🚀 Get Started — Free
             </button>
-            <button className="btn btn-outline" style={{ width: '100%', marginTop: '16px', border: 'none' }} onClick={() => setOnboardingStep('auth')}>
+            <button
+              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: '0.9rem', textDecoration: 'underline' }}
+              onClick={() => setOnboardingStep('auth')}
+            >
               I already have an account
             </button>
           </div>
         </div>
       );
     }
-    
+
+    if (onboardingStep === 'quiz') {
+      return (
+        <div style={{ minHeight: '100vh', background: 'var(--bg-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ maxWidth: '480px', width: '100%' }}>
+            <OnboardingQuizView onComplete={(profile) => {
+              setUserProfile(profile);
+              setOnboardingStep('placement');
+            }} />
+          </div>
+        </div>
+      );
+    }
+
     if (onboardingStep === 'placement') {
       return (
         <div className="app-container" style={{ background: 'white' }}>
@@ -248,7 +277,7 @@ function App() {
       );
     }
 
-    return <AuthView tempLevel={tempLevel} />;
+    return <AuthView tempLevel={tempLevel} userProfile={userProfile} />;
   }
 
   const generateNextWeek = async () => {
@@ -1671,7 +1700,7 @@ function ExpressionsView() {
   );
 }
 
-function AuthView({ tempLevel }) {
+function AuthView({ tempLevel, userProfile }) {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -1685,11 +1714,14 @@ function AuthView({ tempLevel }) {
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         
-        if (tempLevel && data?.user?.id) {
+        if (data?.user?.id) {
+          const initialContent = {};
+          if (tempLevel) initialContent.userLevel = tempLevel;
+          if (userProfile && Object.keys(userProfile).length > 0) initialContent.userProfile = userProfile;
           await supabase.from('user_progress').insert({ 
             user_id: data.user.id, 
             active_day: 1,
-            generated_content: { userLevel: tempLevel }
+            generated_content: Object.keys(initialContent).length > 0 ? initialContent : { userLevel: 'Not evaluated' }
           });
         }
         
@@ -1754,6 +1786,132 @@ function AuthView({ tempLevel }) {
 }
 
 export default App;
+
+// ============================================================
+// ONBOARDING QUIZ VIEW
+// ============================================================
+function OnboardingQuizView({ onComplete }) {
+  const steps = [
+    {
+      id: 'goal',
+      title: "What's your main goal?",
+      subtitle: "We'll personalize your path based on this",
+      emoji: '🎯',
+      options: [
+        { value: 'interview', label: 'Ace job interviews', icon: '🎙️' },
+        { value: 'meetings', label: 'Speak in meetings', icon: '🗣️' },
+        { value: 'emails', label: 'Write pro emails', icon: '📧' },
+        { value: 'presentations', label: 'Give presentations', icon: '📊' },
+      ]
+    },
+    {
+      id: 'sector',
+      title: "What's your role?",
+      subtitle: "Your vocabulary will be tailored to your field",
+      emoji: '🧑‍💻',
+      options: [
+        { value: 'frontend', label: 'Frontend Developer', icon: '⚛️' },
+        { value: 'backend', label: 'Backend Developer', icon: '⚙️' },
+        { value: 'devops', label: 'DevOps / Cloud', icon: '☁️' },
+        { value: 'data', label: 'Data / ML Engineer', icon: '📊' },
+        { value: 'pm', label: 'Product Manager', icon: '🗂️' },
+        { value: 'fullstack', label: 'Full-Stack', icon: '🔀' },
+      ]
+    },
+    {
+      id: 'time',
+      title: "How much time per day?",
+      subtitle: "We'll create bite-sized sessions that fit your schedule",
+      emoji: '⏱️',
+      options: [
+        { value: '5', label: '5 minutes', icon: '⚡', desc: 'Quick daily habit' },
+        { value: '15', label: '15 minutes', icon: '🎯', desc: 'Recommended' },
+        { value: '30', label: '30 minutes', icon: '🚀', desc: 'Accelerated progress' },
+      ]
+    },
+    {
+      id: 'deadline',
+      title: "When's your next challenge?",
+      subtitle: "We'll prioritize what's most useful for your timing",
+      emoji: '📅',
+      options: [
+        { value: '1month', label: 'Within 1 month', icon: '🔥', desc: 'Intensive plan' },
+        { value: '3months', label: 'Within 3 months', icon: '📈', desc: 'Balanced plan' },
+        { value: 'nodate', label: 'No specific date', icon: '🌱', desc: 'Long-term growth' },
+      ]
+    },
+  ];
+
+  const [currentStep, setCurrentStep] = useState(0);
+  const [selections, setSelections] = useState({});
+  const [animating, setAnimating] = useState(false);
+
+  const step = steps[currentStep];
+  const progress = ((currentStep) / steps.length) * 100;
+
+  const handleSelect = (value) => {
+    const newSelections = { ...selections, [step.id]: value };
+    setSelections(newSelections);
+    setAnimating(true);
+    setTimeout(() => {
+      setAnimating(false);
+      if (currentStep < steps.length - 1) {
+        setCurrentStep(currentStep + 1);
+      } else {
+        onComplete(newSelections);
+      }
+    }, 250);
+  };
+
+  return (
+    <div style={{ opacity: animating ? 0 : 1, transition: 'opacity 0.25s ease' }}>
+      {/* Header */}
+      <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '16px' }}>
+          Step {currentStep + 1} of {steps.length}
+        </div>
+        {/* Progress bar */}
+        <div style={{ height: '4px', background: '#E2E8F0', borderRadius: '2px', marginBottom: '28px' }}>
+          <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(90deg, #4F46E5, #7C3AED)', borderRadius: '2px', transition: 'width 0.4s ease' }} />
+        </div>
+        <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>{step.emoji}</div>
+        <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--text-main)', marginBottom: '6px' }}>{step.title}</h2>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{step.subtitle}</p>
+      </div>
+
+      {/* Options */}
+      <div style={{ display: 'grid', gridTemplateColumns: step.options.length <= 3 ? '1fr' : '1fr 1fr', gap: '10px' }}>
+        {step.options.map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => handleSelect(opt.value)}
+            style={{
+              padding: '16px',
+              borderRadius: '12px',
+              border: '2px solid var(--border-color)',
+              background: 'white',
+              cursor: 'pointer',
+              textAlign: 'left',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              transition: 'all 0.15s',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.05)'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#4F46E5'; e.currentTarget.style.background = '#EEF2FF'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.background = 'white'; }}
+          >
+            <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>{opt.icon}</span>
+            <div>
+              <div style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--text-main)' }}>{opt.label}</div>
+              {opt.desc && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>{opt.desc}</div>}
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ============================================================
 // INTERVIEW SIMULATION VIEW
