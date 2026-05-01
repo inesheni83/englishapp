@@ -1,6 +1,23 @@
+import { verifySupabaseJWT } from './_lib/auth.js';
+import { checkRateLimit } from './_lib/rateLimit.js';
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
-  
+
+  // 1. Auth
+  const authHeader = req.headers.authorization || req.headers.Authorization;
+  const auth = await verifySupabaseJWT(authHeader);
+  if (!auth) {
+    return res.status(401).json({ error: 'Missing or invalid authentication token' });
+  }
+
+  // 2. Rate limit (separate quota for TTS)
+  const rl = await checkRateLimit(auth.userId, 'tts');
+  if (!rl.ok) {
+    res.setHeader('Retry-After', String(rl.retryAfter || 60));
+    return res.status(429).json({ error: 'Rate limit exceeded', reason: rl.reason });
+  }
+
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
     return res.status(404).json({ error: 'No ElevenLabs API Key configured' });
@@ -10,7 +27,7 @@ export default async function handler(req, res) {
   if (!text) return res.status(400).json({ error: 'No text provided' });
 
   // Utilisation d'une voix professionnelle standard (ex: Rachel)
-  const voiceId = '21m00Tcm4TlvDq8ikWAM'; 
+  const voiceId = '21m00Tcm4TlvDq8ikWAM';
 
   try {
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
@@ -18,13 +35,13 @@ export default async function handler(req, res) {
       headers: {
         'Accept': 'audio/mpeg',
         'xi-api-key': apiKey,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         text,
         model_id: 'eleven_multilingual_v2',
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 }
-      })
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+      }),
     });
 
     if (!response.ok) {
