@@ -5,6 +5,7 @@ import { dailyContent, dialogues, discussionExpressions } from './data.js';
 import { supabase } from './supabaseClient';
 import { LegalFooter, LegalDocInline } from './components/LegalDocs.jsx';
 import { CookieBanner } from './components/CookieBanner.jsx';
+import { JobCoachView } from './components/JobCoachView.jsx';
 
 // Wrapper around fetch that automatically attaches the current Supabase JWT
 // as Authorization: Bearer <token>. All calls to /api/* must use this helper
@@ -36,6 +37,7 @@ function App() {
   const [userProfile, setUserProfile] = useState({});
   const [challengeStreak, setChallengeStreak] = useState(0);
   const [todayChallengeCompleted, setTodayChallengeCompleted] = useState(false);
+  const [targetedJobPath, setTargetedJobPath] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -445,7 +447,21 @@ function App() {
           setActiveTab('learn');
         }} />}
         {activeTab === 'placement' && <PlacementTestView onComplete={handleUpdateLevel} />}
-        {activeTab === 'interview' && <InterviewView userLevel={userLevel} session={session} />}
+        {activeTab === 'interview' && <InterviewView
+          userLevel={userLevel}
+          session={session}
+          targetedPath={targetedJobPath}
+          onTargetedConsumed={() => setTargetedJobPath(null)}
+          onSwitchToJobCoach={() => setActiveTab('jobcoach')}
+        />}
+        {activeTab === 'jobcoach' && <JobCoachView
+          session={session}
+          userLevel={userLevel}
+          onLaunchTargetedInterview={(path) => {
+            setTargetedJobPath(path);
+            setActiveTab('interview');
+          }}
+        />}
         {activeTab === 'challenges' && <ChallengesView
           userLevel={userLevel}
           session={session}
@@ -537,6 +553,39 @@ function HomeView({ activeDay, setActiveDay, setActiveTab, totalDays, generateNe
           {!(unlockedDay > totalDays) && <span style={{position: 'absolute', top: '-6px', right: '-6px', fontSize: '1rem'}}>🔒</span>}
         </div>
       </div>
+
+      {/* === JOB COACH CTA === */}
+      <button
+        onClick={() => setActiveTab('jobcoach')}
+        style={{
+          width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', padding: 0, background: 'none', marginBottom: '16px'
+        }}
+      >
+        <div style={{
+          borderRadius: '16px',
+          padding: '20px',
+          background: 'linear-gradient(135deg, #4F46E5, #7C3AED, #2563EB)',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 8px 24px rgba(79, 70, 229, 0.35)',
+          position: 'relative',
+          overflow: 'hidden',
+        }}>
+          <div style={{ position: 'absolute', top: '8px', right: '12px', background: 'rgba(255,255,255,0.18)', color: 'white', padding: '2px 8px', borderRadius: '8px', fontSize: '0.65rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.08em' }}>NEW</div>
+          <div style={{ flex: 1, paddingRight: '12px' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.85, marginBottom: '4px' }}>Job Coach</div>
+            <div style={{ fontSize: '1.15rem', fontWeight: '800', lineHeight: 1.25 }}>
+              Préparez VOTRE prochain entretien
+            </div>
+            <div style={{ fontSize: '0.85rem', opacity: 0.9, marginTop: '4px' }}>
+              CV + offre d'emploi → parcours sur-mesure
+            </div>
+          </div>
+          <div style={{ fontSize: '2.5rem' }}>🎯</div>
+        </div>
+      </button>
 
       {/* === DAILY CHALLENGE CARD === */}
       <button
@@ -2029,8 +2078,8 @@ function OnboardingQuizView({ onComplete }) {
 // ============================================================
 // INTERVIEW SIMULATION VIEW
 // ============================================================
-function InterviewView({ userLevel, session }) {
-  const [stage, setStage] = useState('setup'); // setup | generating | interview | evaluating | feedback
+function InterviewView({ userLevel, session, targetedPath, onTargetedConsumed, onSwitchToJobCoach }) {
+  const [stage, setStage] = useState('setup'); // setup | generating | interview | evaluating | feedback | history
   const [jobTitle, setJobTitle] = useState('');
   const [company, setCompany] = useState('');
   const [interviewType, setInterviewType] = useState('mixed');
@@ -2042,6 +2091,28 @@ function InterviewView({ userLevel, session }) {
   const [openIdx, setOpenIdx] = useState(null);
   const [historyList, setHistoryList] = useState([]);
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
+  const [isTargeted, setIsTargeted] = useState(false);
+
+  // If a targeted job path is provided, skip the generation step
+  // and load the pre-generated questions directly into the interview.
+  useEffect(() => {
+    if (!targetedPath) return;
+    const qs = targetedPath.interview_questions || [];
+    if (qs.length === 0) return;
+    // Sync external prop -> internal state when a targeted job path is provided
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQuestions(qs.map((q, i) => ({ ...q, id: q.id ?? i + 1 })));
+    setJobTitle(targetedPath.job_title || '');
+    setCompany(targetedPath.company_name || '');
+    setInterviewType('targeted');
+    setAnswers([]);
+    setCurrentQ(0);
+    setCurrentAnswer('');
+    setFeedback(null);
+    setIsTargeted(true);
+    setStage('interview');
+    if (onTargetedConsumed) onTargetedConsumed();
+  }, [targetedPath, onTargetedConsumed]);
 
   const levelBand = (() => {
     const base = userLevel?.split(' ')?.[0] || 'B1';
@@ -2248,6 +2319,7 @@ function InterviewView({ userLevel, session }) {
     setCurrentAnswer('');
     setFeedback(null);
     setCurrentQ(0);
+    setIsTargeted(false);
   };
 
   const meta = window._interviewMeta || {};
@@ -2257,9 +2329,27 @@ function InterviewView({ userLevel, session }) {
   if (stage === 'setup') return (
     <div>
       <h1 style={{ marginBottom: '4px' }}>🎙️ Interview Simulator</h1>
-      <p style={{ color: 'var(--text-muted)', marginBottom: '28px', fontSize: '0.9rem' }}>
+      <p style={{ color: 'var(--text-muted)', marginBottom: '20px', fontSize: '0.9rem' }}>
         Practise a real job interview with AI. Get personalised feedback on your English and your answers.
       </p>
+
+      {onSwitchToJobCoach && (
+        <button
+          onClick={onSwitchToJobCoach}
+          style={{
+            width: '100%', padding: '14px 16px', marginBottom: '20px', borderRadius: '12px', border: 'none',
+            background: 'linear-gradient(135deg, #4F46E5, #7C3AED)', color: 'white', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left',
+          }}
+        >
+          <div>
+            <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.85, fontWeight: '700' }}>Recommandé</div>
+            <div style={{ fontWeight: '800', fontSize: '0.95rem', marginTop: '2px' }}>🎯 Préparer un entretien spécifique</div>
+            <div style={{ fontSize: '0.78rem', opacity: 0.85, marginTop: '2px' }}>Avec votre CV et l'offre, questions sur-mesure</div>
+          </div>
+          <ChevronRight size={20} />
+        </button>
+      )}
 
       <div className="card" style={{ marginBottom: '16px' }}>
         <h2 style={{ fontSize: '1rem', marginBottom: '16px', color: 'var(--text-main)' }}>📋 Interview Setup</h2>
@@ -2380,10 +2470,15 @@ function InterviewView({ userLevel, session }) {
         </div>
 
         {/* Category badge */}
-        <div style={{ marginBottom: '12px' }}>
+        <div style={{ marginBottom: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--primary)', background: '#EEF2FF', padding: '3px 10px', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             {q.category}
           </span>
+          {isTargeted && (
+            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'white', background: 'linear-gradient(135deg, #F59E0B, #EF4444)', padding: '3px 10px', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              🎯 Mode ciblé
+            </span>
+          )}
         </div>
 
         {/* Interviewer bubble */}
