@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronRight, RefreshCw, Mic, Volume2 } from 'lucide-react';
 import { supabase } from '../supabaseClient.js';
 import { authFetch } from '../lib/authFetch.js';
 import { levelBandFor } from '../lib/cefr.js';
@@ -22,6 +22,8 @@ export function InterviewView({ userLevel, session, targetedPath, onTargetedCons
   const [historyList, setHistoryList] = useState([]);
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
   const [isTargeted, setIsTargeted] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [speakingKey, setSpeakingKey] = useState(null); // identifier of the currently-speaking text
 
   // If a targeted job path is provided, skip the generation step
   // and load the pre-generated questions directly into the interview.
@@ -45,6 +47,86 @@ export function InterviewView({ userLevel, session, targetedPath, onTargetedCons
   }, [targetedPath, onTargetedConsumed]);
 
   const levelBand = levelBandFor(userLevel);
+
+  // Read the given text aloud. Try ElevenLabs (via /api/tts), fall back to
+  // the browser's native speechSynthesis. `key` identifies which text is
+  // currently being read so the UI can show a spinning state on the right
+  // button only.
+  const speak = async (text, key) => {
+    if (!text) return;
+    setSpeakingKey(key);
+    try {
+      const res = await authFetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.onended = () => setSpeakingKey(null);
+        audio.onerror = () => setSpeakingKey(null);
+        audio.play();
+        return;
+      }
+    } catch {
+      // fall through to native fallback
+    }
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      const voices = window.speechSynthesis.getVoices();
+      const bestVoice = voices.find(v => v.lang.startsWith('en-US') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Premium'))) || voices.find(v => v.lang.startsWith('en'));
+      if (bestVoice) utterance.voice = bestVoice;
+      utterance.rate = 0.95;
+      utterance.pitch = 1.05;
+      utterance.onend = () => setSpeakingKey(null);
+      utterance.onerror = () => setSpeakingKey(null);
+      window.speechSynthesis.speak(utterance);
+    } else {
+      setSpeakingKey(null);
+      toast.error("Audio playback is not supported in this browser.");
+    }
+  };
+
+  const startRecording = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error("Speech recognition is not supported in this browser. Please use Chrome.");
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onstart = () => setIsRecording(true);
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setCurrentAnswer(prev => (prev ? prev + ' ' : '') + transcript);
+      setIsRecording(false);
+    };
+    recognition.onerror = () => setIsRecording(false);
+    recognition.onend = () => setIsRecording(false);
+    recognition.start();
+  };
+
+  // Reusable styles for inline speaker buttons (rounded, accent colour)
+  const speakerBtnStyle = (active) => ({
+    background: active ? 'var(--accent-light)' : 'transparent',
+    border: '1px solid var(--border-color)',
+    color: active ? 'var(--accent)' : 'var(--text-muted)',
+    cursor: 'pointer',
+    padding: '6px 8px',
+    borderRadius: '50%',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    transition: 'all 0.15s',
+  });
 
   const fetchHistory = async () => {
     if (!session?.user) return;
@@ -403,8 +485,17 @@ export function InterviewView({ userLevel, session, targetedPath, onTargetedCons
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: '600' }}>
               {meta.interviewerName || 'Interviewer'} · {company}
             </div>
-            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '0 12px 12px 12px', padding: '14px 16px', fontSize: '1rem', lineHeight: '1.6', color: 'var(--text-main)', fontWeight: '500' }}>
-              {q.question}
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '0 12px 12px 12px', padding: '14px 16px', fontSize: '1rem', lineHeight: '1.6', color: 'var(--text-main)', fontWeight: '500', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+              <span style={{ flex: 1 }}>{q.question}</span>
+              <button
+                onClick={() => speak(q.question, `q-${currentQ}`)}
+                disabled={speakingKey === `q-${currentQ}`}
+                style={speakerBtnStyle(speakingKey === `q-${currentQ}`)}
+                title="Listen to the question"
+                aria-label="Listen to the question"
+              >
+                <Volume2 size={16} />
+              </button>
             </div>
             {q.hint && (
               <div style={{ marginTop: '8px', fontSize: '0.8rem', color: '#B45309', background: '#FFFBEB', padding: '6px 10px', borderRadius: '6px', border: '1px solid #FDE68A' }}>
@@ -433,12 +524,35 @@ export function InterviewView({ userLevel, session, targetedPath, onTargetedCons
           <textarea
             value={currentAnswer}
             onChange={e => setCurrentAnswer(e.target.value)}
-            placeholder="Type your answer in English..."
+            placeholder="Type or speak your answer in English..."
             rows={5}
             style={{ width: '100%', padding: '12px 14px', border: '2px solid var(--border-color)', borderRadius: '10px', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical', lineHeight: '1.5' }}
             onFocus={e => e.target.style.borderColor = 'var(--primary)'}
             onBlur={e => e.target.style.borderColor = 'var(--border-color)'}
           />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+            <button
+              onClick={startRecording}
+              disabled={isRecording}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '10px',
+                border: '1px solid var(--border-color)',
+                background: isRecording ? '#FEE2E2' : 'white',
+                color: isRecording ? '#EF4444' : 'var(--text-main)',
+                cursor: isRecording ? 'wait' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '0.85rem',
+                fontWeight: '600',
+              }}
+              title="Dictate your answer"
+              aria-label="Dictate your answer"
+            >
+              <Mic size={16} /> {isRecording ? 'Listening…' : 'Speak'}
+            </button>
+          </div>
         </div>
 
         <button
@@ -506,6 +620,24 @@ export function InterviewView({ userLevel, session, targetedPath, onTargetedCons
               </button>
               {openIdx === idx && (
                 <div style={{ padding: '14px 16px', borderTop: '1px solid #F1F5F9' }}>
+                  {/* Original question with TTS */}
+                  {questions[idx]?.question && (
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Question</div>
+                      <div style={{ background: '#F8FAFC', padding: '10px 12px', borderRadius: '8px', fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.5', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                        <span style={{ flex: 1 }}>{questions[idx].question}</span>
+                        <button
+                          onClick={() => speak(questions[idx].question, `fb-q-${idx}`)}
+                          disabled={speakingKey === `fb-q-${idx}`}
+                          style={speakerBtnStyle(speakingKey === `fb-q-${idx}`)}
+                          title="Listen to the question"
+                          aria-label="Listen to the question"
+                        >
+                          <Volume2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {/* User answer */}
                   <div style={{ marginBottom: '12px' }}>
                     <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Your Answer</div>
@@ -523,9 +655,20 @@ export function InterviewView({ userLevel, session, targetedPath, onTargetedCons
                     <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#1D4ED8', marginBottom: '4px', textTransform: 'uppercase' }}>💡 Content Feedback</div>
                     <div style={{ fontSize: '0.88rem', color: '#1E3A5F', lineHeight: '1.5' }}>{fa.contentFeedback}</div>
                   </div>
-                  {/* Model answer */}
+                  {/* Model answer with TTS */}
                   <div style={{ padding: '12px', background: '#F0FDF4', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#065F46', marginBottom: '6px', textTransform: 'uppercase' }}>✨ Model Answer (English)</div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#065F46', marginBottom: '6px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>✨ Model Answer (English)</span>
+                      <button
+                        onClick={() => speak(fa.modelAnswer, `fb-m-${idx}`)}
+                        disabled={speakingKey === `fb-m-${idx}` || !fa.modelAnswer}
+                        style={speakerBtnStyle(speakingKey === `fb-m-${idx}`)}
+                        title="Listen to the model answer"
+                        aria-label="Listen to the model answer"
+                      >
+                        <Volume2 size={14} />
+                      </button>
+                    </div>
                     <div style={{ fontSize: '0.9rem', color: '#047857', lineHeight: '1.6' }}>{fa.modelAnswer}</div>
                   </div>
                 </div>
