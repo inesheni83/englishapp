@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Mic } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Mic, Volume2 } from 'lucide-react';
 import { authFetch } from '../lib/authFetch.js';
 import { levelBandFor } from '../lib/cefr.js';
 import { describeApiError } from '../lib/apiErrors.js';
@@ -27,8 +27,67 @@ export function ChallengesView({
   const [userAnswer, setUserAnswer] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [evaluation, setEvaluation] = useState(todayResult?.evaluation || null);
+  const [speakingKey, setSpeakingKey] = useState(null);
+  const currentAudioRef = useRef(null);
 
   const levelBand = levelBandFor(userLevel);
+
+  const stopSpeaking = () => {
+    if (currentAudioRef.current) {
+      try { currentAudioRef.current.pause(); } catch { /* noop */ }
+      currentAudioRef.current = null;
+    }
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    setSpeakingKey(null);
+  };
+
+  const speak = async (text, key) => {
+    if (!text) return;
+    stopSpeaking();
+    setSpeakingKey(key);
+    try {
+      const res = await authFetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        currentAudioRef.current = audio;
+        audio.onended = () => { currentAudioRef.current = null; setSpeakingKey(null); };
+        audio.onerror = () => { currentAudioRef.current = null; setSpeakingKey(null); };
+        audio.play();
+        return;
+      }
+    } catch { /* fall through to native */ }
+
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.95;
+      utterance.pitch = 1.05;
+      utterance.onend = () => setSpeakingKey(null);
+      utterance.onerror = () => setSpeakingKey(null);
+      window.speechSynthesis.speak(utterance);
+    } else {
+      setSpeakingKey(null);
+    }
+  };
+
+  const speakerBtnStyle = (active) => ({
+    background: active ? 'var(--accent-light)' : 'transparent',
+    border: '1px solid var(--border-color)',
+    color: active ? 'var(--accent)' : 'var(--text-muted)',
+    cursor: 'pointer',
+    padding: '6px 8px',
+    borderRadius: '50%',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  });
 
   const startRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -237,7 +296,18 @@ Return ONLY valid JSON:
           <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>Your answer</div>
           <p style={{ margin: '0 0 16px 0', padding: '10px 12px', background: '#F8FAFC', borderRadius: '8px', fontSize: '0.95rem' }}>{todayResult?.userAnswer || userAnswer}</p>
 
-          <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>Improved version</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>Improved version</div>
+            <button
+              onClick={() => speak(evaluation.improvedAnswer, 'improved')}
+              disabled={speakingKey === 'improved' || !evaluation.improvedAnswer}
+              style={speakerBtnStyle(speakingKey === 'improved')}
+              title="Listen to the improved version"
+              aria-label="Listen to the improved version"
+            >
+              <Volume2 size={14} />
+            </button>
+          </div>
           <p style={{ margin: '0 0 16px 0', padding: '10px 12px', background: '#ECFDF5', borderRadius: '8px', fontSize: '0.95rem', color: '#065F46' }}>{evaluation.improvedAnswer}</p>
 
           {evaluation.grammarNotes && (

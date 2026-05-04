@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Mic, Send } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Mic, Send, Volume2 } from 'lucide-react';
 import { authFetch } from '../lib/authFetch.js';
 import { useToast } from '../components/Toast.jsx';
 
@@ -11,8 +11,27 @@ export function CoachView() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [speakingKey, setSpeakingKey] = useState(null);
+  const currentAudioRef = useRef(null);
 
-  const speak = async (text) => {
+  // Stop any ongoing TTS playback (ElevenLabs Audio + native speechSynthesis).
+  const stopSpeaking = () => {
+    if (currentAudioRef.current) {
+      try {
+        currentAudioRef.current.pause();
+      } catch { /* noop */ }
+      currentAudioRef.current = null;
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setSpeakingKey(null);
+  };
+
+  const speak = async (text, key = 'auto') => {
+    if (!text) return;
+    stopSpeaking();
+    setSpeakingKey(key);
     try {
       const res = await authFetch('/api/tts', {
         method: 'POST',
@@ -23,6 +42,9 @@ export function CoachView() {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
+        currentAudioRef.current = audio;
+        audio.onended = () => { currentAudioRef.current = null; setSpeakingKey(null); };
+        audio.onerror = () => { currentAudioRef.current = null; setSpeakingKey(null); };
         audio.play();
         return; // Success, skip native fallback
       }
@@ -45,7 +67,11 @@ export function CoachView() {
 
       utterance.rate = 0.95;
       utterance.pitch = 1.05;
+      utterance.onend = () => setSpeakingKey(null);
+      utterance.onerror = () => setSpeakingKey(null);
       window.speechSynthesis.speak(utterance);
+    } else {
+      setSpeakingKey(null);
     }
   };
 
@@ -55,6 +81,8 @@ export function CoachView() {
       toast.error("Speech recognition is not supported in this browser. Please use Chrome.");
       return;
     }
+    // Don't let the bot's voice overlap with the user's recording
+    stopSpeaking();
     const recognition = new SpeechRecognition();
     recognition.lang = 'en-US';
     recognition.interimResults = false;
@@ -71,6 +99,19 @@ export function CoachView() {
 
     recognition.start();
   };
+
+  const speakerBtnStyle = (active) => ({
+    background: active ? 'var(--accent-light)' : 'transparent',
+    border: 'none',
+    color: active ? 'var(--accent)' : 'var(--text-muted)',
+    cursor: 'pointer',
+    padding: '4px 6px',
+    borderRadius: '50%',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  });
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -110,8 +151,10 @@ export function CoachView() {
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
-          setMessages(prev => [...prev, { id: Date.now(), type: 'bot', response: parsed.response, feedback: parsed.feedback }]);
-          speak(parsed.response);
+          // eslint-disable-next-line react-hooks/purity
+          const newId = Date.now();
+          setMessages(prev => [...prev, { id: newId, type: 'bot', response: parsed.response, feedback: parsed.feedback }]);
+          speak(parsed.response, `msg-${newId}`);
         } else {
           throw new Error("Invalid JSON format");
         }
@@ -142,9 +185,24 @@ export function CoachView() {
                 <strong style={{ display: 'block' }}>👩‍🏫 Coach Feedback: Perfect grammar! 🌟</strong>
               </div>
             )}
-            <div className={`message ${msg.type}`} style={{ margin: 0, maxWidth: '85%' }}>
-              {msg.type === 'user' ? msg.text : msg.response}
-            </div>
+            {msg.type === 'bot' ? (
+              <div className={`message ${msg.type}`} style={{ margin: 0, maxWidth: '85%', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                <span style={{ flex: 1 }}>{msg.response}</span>
+                <button
+                  onClick={() => speak(msg.response, `msg-${msg.id}`)}
+                  disabled={speakingKey === `msg-${msg.id}`}
+                  style={speakerBtnStyle(speakingKey === `msg-${msg.id}`)}
+                  title="Replay this message"
+                  aria-label="Replay this message"
+                >
+                  <Volume2 size={16} />
+                </button>
+              </div>
+            ) : (
+              <div className={`message ${msg.type}`} style={{ margin: 0, maxWidth: '85%' }}>
+                {msg.text}
+              </div>
+            )}
           </div>
         ))}
         {loading && <div className="message bot" style={{ maxWidth: '85%', margin: 0 }}>Thinking...</div>}
@@ -153,7 +211,7 @@ export function CoachView() {
         <button
           style={{ background: isRecording ? '#FEE2E2' : 'none', border: 'none', color: isRecording ? '#EF4444' : 'var(--text-muted)', cursor: 'pointer', padding: '8px', borderRadius: '50%', transition: 'all 0.2s' }}
           onClick={startRecording}
-          title="Maintenez ou cliquez pour parler"
+          title="Press or click to speak"
         >
           <Mic size={24} />
         </button>
