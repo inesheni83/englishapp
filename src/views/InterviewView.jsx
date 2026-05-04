@@ -3,8 +3,12 @@ import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { supabase } from '../supabaseClient.js';
 import { authFetch } from '../lib/authFetch.js';
 import { levelBandFor } from '../lib/cefr.js';
+import { describeApiError } from '../lib/apiErrors.js';
+import { useToast } from '../components/Toast.jsx';
+import { LoadingState } from '../components/LoadingState.jsx';
 
 export function InterviewView({ userLevel, session, targetedPath, onTargetedConsumed, onSwitchToJobCoach }) {
+  const toast = useToast();
   const [stage, setStage] = useState('setup'); // setup | generating | interview | evaluating | feedback | history
   const [jobTitle, setJobTitle] = useState('');
   const [company, setCompany] = useState('');
@@ -131,16 +135,12 @@ export function InterviewView({ userLevel, session, targetedPath, onTargetedCons
         window._interviewMeta = { interviewerName: result.interviewerName, companyContext: result.companyContext };
       } else {
         setStage('setup');
-        alert('Generation failed. Please try again.');
+        toast.error('Generation failed. Please try again.');
       }
     } catch (e) {
       console.error(e);
       setStage('setup');
-      if (e.message === 'RATE_LIMIT') {
-        alert("Too many requests (Gemini Rate Limit). Please wait about 30-60 seconds before trying again.");
-      } else {
-        alert("An error occurred during generation. Please try again.");
-      }
+      toast.error(describeApiError(e));
     }
   };
 
@@ -210,15 +210,15 @@ export function InterviewView({ userLevel, session, targetedPath, onTargetedCons
         }
       } else {
         setStage('interview');
-        alert('Feedback generation failed. Please try again.');
+        toast.error('Feedback generation failed. Please try again.');
       }
     } catch (e) {
       console.error(e);
       setStage('interview');
       if (e.message === 'RATE_LIMIT') {
-        alert("Too many requests (Gemini Rate Limit). Your answers are saved, please wait 60 seconds and click 'Finish' again.");
+        toast.error("Too many requests. Your answers are saved — wait 60 seconds and click Finish again.", { duration: 6000 });
       } else {
-        alert("An error occurred during evaluation. Please try again.");
+        toast.error(describeApiError(e));
       }
     }
   };
@@ -256,9 +256,9 @@ export function InterviewView({ userLevel, session, targetedPath, onTargetedCons
           }}
         >
           <div>
-            <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.85, fontWeight: '700' }}>Recommandé</div>
-            <div style={{ fontWeight: '800', fontSize: '0.95rem', marginTop: '2px' }}>🎯 Préparer un entretien spécifique</div>
-            <div style={{ fontSize: '0.78rem', opacity: 0.85, marginTop: '2px' }}>Avec votre CV et l'offre, questions sur-mesure</div>
+            <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.85, fontWeight: '700' }}>Recommended</div>
+            <div style={{ fontWeight: '800', fontSize: '0.95rem', marginTop: '2px' }}>🎯 Prepare for a specific interview</div>
+            <div style={{ fontSize: '0.78rem', opacity: 0.85, marginTop: '2px' }}>Use your CV and the job offer for tailored questions.</div>
           </div>
           <ChevronRight size={20} />
         </button>
@@ -344,20 +344,20 @@ export function InterviewView({ userLevel, session, targetedPath, onTargetedCons
 
   // ─── GENERATING ──────────────────────────────────────────────────────────────
   if (stage === 'generating') return (
-    <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-      <div style={{ fontSize: '3rem', marginBottom: '16px', animation: 'pulse 1.5s infinite' }}>🤖</div>
-      <h2 style={{ marginBottom: '8px' }}>Preparing your interview...</h2>
-      <p style={{ color: 'var(--text-muted)' }}>Generating real questions for <strong>{jobTitle}</strong> at <strong>{company}</strong></p>
-    </div>
+    <LoadingState
+      emoji="🤖"
+      title="Preparing your interview…"
+      subtitle={`Generating realistic questions for ${jobTitle} at ${company}.`}
+    />
   );
 
   // ─── EVALUATING ──────────────────────────────────────────────────────────────
   if (stage === 'evaluating') return (
-    <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-      <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📊</div>
-      <h2 style={{ marginBottom: '8px' }}>Analysing your answers...</h2>
-      <p style={{ color: 'var(--text-muted)' }}>Your English and content are being evaluated by AI.</p>
-    </div>
+    <LoadingState
+      emoji="📊"
+      title="Analysing your answers…"
+      subtitle="Your English and content are being evaluated by AI."
+    />
   );
 
   // ─── INTERVIEW ───────────────────────────────────────────────────────────────
@@ -389,7 +389,7 @@ export function InterviewView({ userLevel, session, targetedPath, onTargetedCons
           </span>
           {isTargeted && (
             <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'white', background: 'linear-gradient(135deg, #F59E0B, #EF4444)', padding: '3px 10px', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              🎯 Mode ciblé
+              🎯 Targeted mode
             </span>
           )}
         </div>

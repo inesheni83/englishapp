@@ -72,10 +72,10 @@ export function HomeView({ activeDay, setActiveDay, setActiveTab, totalDays, gen
           <div style={{ flex: 1, paddingRight: '12px' }}>
             <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.85, marginBottom: '4px' }}>Job Coach</div>
             <div style={{ fontSize: '1.15rem', fontWeight: '800', lineHeight: 1.25 }}>
-              Préparez VOTRE prochain entretien
+              Prepare for YOUR next interview
             </div>
             <div style={{ fontSize: '0.85rem', opacity: 0.9, marginTop: '4px' }}>
-              CV + offre d'emploi → parcours sur-mesure
+              Resume + job offer → tailored learning path
             </div>
           </div>
           <div style={{ fontSize: '2.5rem' }}>🎯</div>

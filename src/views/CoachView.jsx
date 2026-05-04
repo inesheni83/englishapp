@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Mic, Send } from 'lucide-react';
 import { authFetch } from '../lib/authFetch.js';
+import { useToast } from '../components/Toast.jsx';
 
 export function CoachView() {
+  const toast = useToast();
   const [messages, setMessages] = useState([
     { id: 1, type: 'bot', response: "Hello! I'm your AI English Coach. Ready for our 3-minute conversation practice today? Let's talk about your current web project and the tech stack you're using.", feedback: null }
   ]);
@@ -50,7 +52,7 @@ export function CoachView() {
   const startRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Votre navigateur ne supporte pas la reconnaissance vocale. Utilisez Chrome.");
+      toast.error("Speech recognition is not supported in this browser. Please use Chrome.");
       return;
     }
     const recognition = new SpeechRecognition();
@@ -111,10 +113,10 @@ export function CoachView() {
           setMessages(prev => [...prev, { id: Date.now(), type: 'bot', response: parsed.response, feedback: parsed.feedback }]);
           speak(parsed.response);
         } else {
-          throw new Error("Format JSON invalide");
+          throw new Error("Invalid JSON format");
         }
       } else {
-        throw new Error("Erreur de réponse");
+        throw new Error("Empty response from AI");
       }
     } catch (error) {
       console.error(error);

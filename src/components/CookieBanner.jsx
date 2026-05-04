@@ -33,7 +33,7 @@ export function CookieBanner() {
   return (
     <div
       role="dialog"
-      aria-label="Information cookies"
+      aria-label="Cookie information"
       style={{
         position: 'fixed',
         bottom: '76px',
@@ -54,9 +54,9 @@ export function CookieBanner() {
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
         <div style={{ fontSize: '1.2rem', flexShrink: 0 }}>🍪</div>
         <div style={{ flex: 1, lineHeight: 1.5 }}>
-          Fluent utilise uniquement des cookies <strong>strictement nécessaires</strong> à
-          votre connexion (session Supabase). Aucun cookie de tracking publicitaire.
-          Plus d'infos dans notre politique de confidentialité.
+          Fluent only uses cookies that are <strong>strictly necessary</strong> for
+          your session (Supabase Auth). No advertising or tracking cookies.
+          Read more in our Privacy Policy.
         </div>
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
@@ -65,7 +65,7 @@ export function CookieBanner() {
           className="btn btn-primary"
           style={{ padding: '8px 16px', fontSize: '0.85rem' }}
         >
-          J'ai compris
+          Got it
         </button>
       </div>
     </div>

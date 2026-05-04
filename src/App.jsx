@@ -4,6 +4,8 @@ import './index.css';
 import { dailyContent } from './data.js';
 import { supabase } from './supabaseClient';
 import { authFetch } from './lib/authFetch.js';
+import { describeApiError } from './lib/apiErrors.js';
+import { useToast } from './components/Toast.jsx';
 
 import { LegalFooter, LegalDocInline } from './components/LegalDocs.jsx';
 import { CookieBanner } from './components/CookieBanner.jsx';
@@ -23,6 +25,7 @@ import { InterviewView } from './views/InterviewView.jsx';
 import { ChallengesView } from './views/ChallengesView.jsx';
 
 function App() {
+  const toast = useToast();
   const [session, setSession] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
   const [activeDay, setActiveDay] = useState(1);
@@ -120,7 +123,7 @@ function App() {
         });
       }
     } catch (err) {
-      console.error("Erreur lors de la sauvegarde :", err);
+      console.error("Failed to save progress:", err);
     }
   };
 
@@ -283,11 +286,11 @@ function App() {
             </button>
 
             <div style={{ marginTop: '32px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
-              <button onClick={() => setOnboardingStep('legal-notice')} style={{ background: 'none', border: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer', fontSize: 'inherit', padding: '4px' }}>Mentions légales</button>
+              <button onClick={() => setOnboardingStep('legal-notice')} style={{ background: 'none', border: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer', fontSize: 'inherit', padding: '4px' }}>Legal notice</button>
               <span style={{ margin: '0 6px' }}>·</span>
-              <button onClick={() => setOnboardingStep('legal-privacy')} style={{ background: 'none', border: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer', fontSize: 'inherit', padding: '4px' }}>Confidentialité</button>
+              <button onClick={() => setOnboardingStep('legal-privacy')} style={{ background: 'none', border: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer', fontSize: 'inherit', padding: '4px' }}>Privacy</button>
               <span style={{ margin: '0 6px' }}>·</span>
-              <button onClick={() => setOnboardingStep('legal-terms')} style={{ background: 'none', border: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer', fontSize: 'inherit', padding: '4px' }}>CGU</button>
+              <button onClick={() => setOnboardingStep('legal-terms')} style={{ background: 'none', border: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer', fontSize: 'inherit', padding: '4px' }}>Terms</button>
             </div>
           </div>
           <CookieBanner />
@@ -300,7 +303,7 @@ function App() {
       return (
         <div style={{ minHeight: '100vh', background: 'var(--bg-color)', padding: '20px' }}>
           <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-            <button onClick={() => setOnboardingStep('welcome')} style={{ marginBottom: '20px', background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.95rem', textDecoration: 'underline' }}>← Retour</button>
+            <button onClick={() => setOnboardingStep('welcome')} style={{ marginBottom: '20px', background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.95rem', textDecoration: 'underline' }}>← Back</button>
             <LegalDocInline docKey={docKey} />
           </div>
         </div>
@@ -379,8 +382,8 @@ function App() {
         }
       }
     } catch (error) {
-      console.error("Erreur lors de la génération:", error);
-      alert("Une erreur est survenue lors de la génération. Assurez-vous d'utiliser `vercel dev` pour tester les API localement.");
+      console.error("Generation failed:", error);
+      toast.error(describeApiError(error));
     }
     setIsGenerating(false);
   };

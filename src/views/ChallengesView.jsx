@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { Mic } from 'lucide-react';
 import { authFetch } from '../lib/authFetch.js';
 import { levelBandFor } from '../lib/cefr.js';
+import { describeApiError } from '../lib/apiErrors.js';
+import { useToast } from '../components/Toast.jsx';
+import { LoadingState } from '../components/LoadingState.jsx';
 
 export function ChallengesView({
   userLevel,
@@ -14,6 +17,7 @@ export function ChallengesView({
   setChallengeStreak,
   setTodayChallengeCompleted,
 }) {
+  const toast = useToast();
   const today = new Date().toISOString().split('T')[0];
   const challenges = generatedContent?.challenges || {};
   const todayResult = challenges[today] || null;
@@ -23,14 +27,13 @@ export function ChallengesView({
   const [userAnswer, setUserAnswer] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [evaluation, setEvaluation] = useState(todayResult?.evaluation || null);
-  const [errorMsg, setErrorMsg] = useState('');
 
   const levelBand = levelBandFor(userLevel);
 
   const startRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Votre navigateur ne supporte pas la reconnaissance vocale. Utilisez Chrome.");
+      toast.error("Speech recognition is not supported in this browser. Please use Chrome.");
       return;
     }
     const recognition = new SpeechRecognition();
@@ -50,7 +53,6 @@ export function ChallengesView({
 
   const generateChallenge = async () => {
     setStage('loading');
-    setErrorMsg('');
     try {
       // Seed pseudo-aléatoire basé sur la date pour varier les défis chaque jour
       const seed = today + (session?.user?.id || 'guest');
@@ -100,18 +102,13 @@ Return ONLY valid JSON:
     } catch (e) {
       console.error('Challenge generation failed:', e);
       setStage('idle');
-      if (e.message === 'RATE_LIMIT') {
-        setErrorMsg("Trop de requêtes. Réessayez dans 30-60 secondes.");
-      } else {
-        setErrorMsg("La génération a échoué. Réessayez dans un instant.");
-      }
+      toast.error(describeApiError(e));
     }
   };
 
   const submitAnswer = async () => {
     if (!userAnswer.trim() || !challenge) return;
     setStage('evaluating');
-    setErrorMsg('');
 
     try {
       const prompt = `You are an English evaluator for a francophone learner at CEFR level ${levelBand}.
@@ -188,11 +185,7 @@ Return ONLY valid JSON:
     } catch (e) {
       console.error('Challenge evaluation failed:', e);
       setStage('answering');
-      if (e.message === 'RATE_LIMIT') {
-        setErrorMsg("Trop de requêtes. Réessayez dans 30-60 secondes.");
-      } else {
-        setErrorMsg("L'évaluation a échoué. Réessayez.");
-      }
+      toast.error(describeApiError(e));
     }
   };
 
@@ -210,7 +203,7 @@ Return ONLY valid JSON:
       <div>
         <h1 style={{ marginBottom: '4px' }}>🎯 Daily Challenge</h1>
         <p style={{ color: 'var(--text-muted)', marginBottom: '24px', fontSize: '0.9rem' }}>
-          Votre défi du {new Date(today).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+          Today’s challenge — {new Date(today).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
 
         <div style={{
@@ -223,7 +216,7 @@ Return ONLY valid JSON:
         }}>
           <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.85, marginBottom: '4px' }}>Streak</div>
           <div style={{ fontSize: '3rem', fontWeight: '900', lineHeight: 1 }}>🔥 {challengeStreak}</div>
-          <div style={{ fontSize: '0.85rem', opacity: 0.9, marginTop: '4px' }}>{challengeStreak > 1 ? 'jours consécutifs' : 'jour'}</div>
+          <div style={{ fontSize: '0.85rem', opacity: 0.9, marginTop: '4px' }}>{challengeStreak > 1 ? 'days in a row' : 'day'}</div>
         </div>
 
         <div className="card" style={{ marginBottom: '16px', background: meta.bg, borderLeft: `4px solid ${meta.color}` }}>
@@ -238,25 +231,25 @@ Return ONLY valid JSON:
         </div>
 
         <div className="card" style={{ marginBottom: '16px' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>Phrase à traduire</div>
+          <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>Sentence to translate</div>
           <p style={{ margin: '0 0 16px 0', fontSize: '1rem', fontStyle: 'italic' }}>« {challenge.frenchSentence} »</p>
 
-          <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>Votre réponse</div>
+          <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>Your answer</div>
           <p style={{ margin: '0 0 16px 0', padding: '10px 12px', background: '#F8FAFC', borderRadius: '8px', fontSize: '0.95rem' }}>{todayResult?.userAnswer || userAnswer}</p>
 
-          <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>Version améliorée</div>
+          <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>Improved version</div>
           <p style={{ margin: '0 0 16px 0', padding: '10px 12px', background: '#ECFDF5', borderRadius: '8px', fontSize: '0.95rem', color: '#065F46' }}>{evaluation.improvedAnswer}</p>
 
           {evaluation.grammarNotes && (
             <>
-              <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>Notes du coach</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>Coach notes</div>
               <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-main)' }}>{evaluation.grammarNotes}</p>
             </>
           )}
         </div>
 
         <div style={{ padding: '12px', background: '#EEF2FF', borderRadius: '10px', textAlign: 'center', fontSize: '0.9rem', color: '#3730A3' }}>
-          💡 Revenez demain pour un nouveau défi et garder votre streak !
+          💡 Come back tomorrow for a fresh challenge and keep your streak alive!
         </div>
       </div>
     );
@@ -268,22 +261,22 @@ Return ONLY valid JSON:
       <div>
         <h1 style={{ marginBottom: '4px' }}>🎯 Daily Challenge</h1>
         <p style={{ color: 'var(--text-muted)', marginBottom: '20px', fontSize: '0.9rem' }}>
-          Traduisez en anglais — environ 2 minutes
+          Translate into English — about 2 minutes.
         </p>
 
         <div className="card" style={{ marginBottom: '16px', background: '#FFFBEB', borderLeft: '4px solid #F59E0B' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#92400E', marginBottom: '6px' }}>Contexte</div>
+          <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#92400E', marginBottom: '6px' }}>Context</div>
           <p style={{ margin: 0, fontSize: '0.9rem', color: '#78350F' }}>{challenge.context}</p>
         </div>
 
         <div className="card" style={{ marginBottom: '16px' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>À traduire</div>
+          <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>To translate</div>
           <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600', color: 'var(--text-main)' }}>« {challenge.frenchSentence} »</p>
         </div>
 
         {challenge.tips?.length > 0 && (
           <div className="card" style={{ marginBottom: '16px', background: '#EEF2FF' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#3730A3', marginBottom: '8px' }}>💡 Pistes</div>
+            <div style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#3730A3', marginBottom: '8px' }}>💡 Hints</div>
             <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.88rem', color: '#3730A3' }}>
               {challenge.tips.map((t, i) => <li key={i} style={{ marginBottom: '4px' }}>{t}</li>)}
             </ul>
@@ -291,7 +284,7 @@ Return ONLY valid JSON:
         )}
 
         <div className="card" style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>Votre traduction</label>
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>Your translation</label>
           <textarea
             value={userAnswer}
             onChange={e => setUserAnswer(e.target.value)}
@@ -306,7 +299,7 @@ Return ONLY valid JSON:
               onClick={startRecording}
               disabled={isRecording}
               style={{ flex: '0 0 auto', padding: '10px 14px', borderRadius: '10px', border: '2px solid var(--border-color)', background: isRecording ? '#FEE2E2' : 'white', color: isRecording ? '#EF4444' : 'var(--text-main)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', fontWeight: '600' }}
-              title="Dicter votre réponse"
+              title="Dictate your answer"
             >
               <Mic size={16} /> {isRecording ? 'Recording...' : 'Speak'}
             </button>
@@ -320,10 +313,6 @@ Return ONLY valid JSON:
             </button>
           </div>
         </div>
-
-        {errorMsg && (
-          <div style={{ padding: '12px', background: '#FEF2F2', borderLeft: '4px solid #EF4444', borderRadius: '8px', color: '#991B1B', fontSize: '0.9rem' }}>{errorMsg}</div>
-        )}
       </div>
     );
   }
@@ -331,11 +320,11 @@ Return ONLY valid JSON:
   // ─── EVALUATING ──────────────────────────────────────────────────────────────
   if (stage === 'evaluating' || stage === 'loading') {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '20px' }}>{stage === 'loading' ? '🎲' : '🧠'}</div>
-        <h2 style={{ marginBottom: '8px' }}>{stage === 'loading' ? 'Génération du défi...' : 'Évaluation en cours...'}</h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Quelques secondes seulement.</p>
-      </div>
+      <LoadingState
+        emoji={stage === 'loading' ? '🎲' : '🧠'}
+        title={stage === 'loading' ? 'Generating today’s challenge…' : 'Evaluating your answer…'}
+        subtitle="Just a few seconds."
+      />
     );
   }
 
@@ -344,7 +333,7 @@ Return ONLY valid JSON:
     <div>
       <h1 style={{ marginBottom: '4px' }}>🎯 Daily Challenge</h1>
       <p style={{ color: 'var(--text-muted)', marginBottom: '24px', fontSize: '0.9rem' }}>
-        2 minutes par jour pour entretenir votre anglais pro.
+        Two minutes a day to keep your professional English sharp.
       </p>
 
       <div className="card" style={{
@@ -355,20 +344,20 @@ Return ONLY valid JSON:
         padding: '28px 20px',
       }}>
         <div style={{ fontSize: '3rem', marginBottom: '8px' }}>🔥</div>
-        <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.85, marginBottom: '4px' }}>Streak actuelle</div>
+        <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.85, marginBottom: '4px' }}>Current streak</div>
         <div style={{ fontSize: '2.4rem', fontWeight: '900', lineHeight: 1 }}>{challengeStreak}</div>
         <div style={{ fontSize: '0.85rem', opacity: 0.9, marginTop: '6px' }}>
-          {challengeStreak === 0 ? 'Commencez aujourd\'hui !' : challengeStreak === 1 ? 'jour' : 'jours consécutifs'}
+          {challengeStreak === 0 ? 'Start today!' : challengeStreak === 1 ? 'day' : 'days in a row'}
         </div>
       </div>
 
       <div className="card" style={{ marginBottom: '16px' }}>
-        <h2 style={{ fontSize: '1rem', marginBottom: '12px' }}>Comment ça marche ?</h2>
+        <h2 style={{ fontSize: '1rem', marginBottom: '12px' }}>How it works</h2>
         <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.7' }}>
-          <li>Une phrase pro francophone à traduire en anglais</li>
-          <li>Adaptée à votre niveau ({userLevel || 'B1'})</li>
-          <li>L'IA évalue votre réponse et suggère une amélioration</li>
-          <li>Un score ≥ 60 maintient votre streak 🔥</li>
+          <li>One French professional sentence to translate into English.</li>
+          <li>Calibrated to your level ({userLevel || 'B1'}).</li>
+          <li>AI rates your answer and suggests an improved version.</li>
+          <li>Score ≥ 60 keeps your streak alive 🔥</li>
         </ul>
       </div>
 
@@ -377,12 +366,8 @@ Return ONLY valid JSON:
         className="btn btn-primary"
         style={{ width: '100%', padding: '16px', fontSize: '1rem' }}
       >
-        🚀 Lancer le défi du jour
+        🚀 Start today’s challenge
       </button>
-
-      {errorMsg && (
-        <div style={{ marginTop: '16px', padding: '12px', background: '#FEF2F2', borderLeft: '4px solid #EF4444', borderRadius: '8px', color: '#991B1B', fontSize: '0.9rem' }}>{errorMsg}</div>
-      )}
     </div>
   );
 }

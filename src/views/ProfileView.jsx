@@ -53,7 +53,7 @@ export function ProfileView({ activeDay, session, setActiveTab, userLevel }) {
         className="btn btn-outline"
         style={{ width: '100%', marginTop: '16px', borderColor: 'var(--danger-color, #ef4444)', color: 'var(--danger-color, #ef4444)' }}
       >
-        Se déconnecter
+        Sign out
       </button>
     </div>
   );

@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { supabase } from '../supabaseClient.js';
 import { LegalFooter } from '../components/LegalDocs.jsx';
 import { CookieBanner } from '../components/CookieBanner.jsx';
+import { useToast } from '../components/Toast.jsx';
 
 export function AuthView({ tempLevel, userProfile }) {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(tempLevel ? true : false);
+  const toast = useToast();
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -28,13 +30,13 @@ export function AuthView({ tempLevel, userProfile }) {
           });
         }
 
-        alert('Inscription réussie ! Vérifiez vos emails pour confirmer votre compte (si activé par défaut sur Supabase), ou connectez-vous.');
+        toast.success("Sign-up successful! Check your inbox to confirm your account, then log in.", { duration: 6000 });
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
     } catch (error) {
-      alert(error.error_description || error.message);
+      toast.error(error.error_description || error.message || "Authentication failed.");
     } finally {
       setLoading(false);
     }
@@ -48,18 +50,18 @@ export function AuthView({ tempLevel, userProfile }) {
 
         <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.95rem', fontWeight: '500' }}>Adresse Email</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.95rem', fontWeight: '500' }}>Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               style={{ width: '100%', padding: '14px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '1rem', boxSizing: 'border-box' }}
-              placeholder="votre@email.com"
+              placeholder="you@email.com"
             />
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.95rem', fontWeight: '500' }}>Mot de passe</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.95rem', fontWeight: '500' }}>Password</label>
             <input
               type="password"
               value={password}
@@ -70,23 +72,23 @@ export function AuthView({ tempLevel, userProfile }) {
             />
           </div>
           <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop: '8px', padding: '14px', fontSize: '1rem', width: '100%' }}>
-            {loading ? 'Chargement...' : (isSignUp ? "Créer un compte" : "Se connecter")}
+            {loading ? 'Loading…' : (isSignUp ? "Create account" : "Sign in")}
           </button>
         </form>
 
         <div style={{ textAlign: 'center', marginTop: '32px', fontSize: '0.95rem', color: 'var(--text-muted)' }}>
-          {isSignUp ? "Vous avez déjà un compte ?" : "Pas encore de compte ?"}
+          {isSignUp ? "Already have an account?" : "No account yet?"}
           <button
             onClick={() => setIsSignUp(!isSignUp)}
             style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 'bold', marginLeft: '8px', cursor: 'pointer', fontSize: '0.95rem' }}
           >
-            {isSignUp ? "Se connecter" : "S'inscrire"}
+            {isSignUp ? "Sign in" : "Sign up"}
           </button>
         </div>
 
         {isSignUp && (
           <p style={{ marginTop: '20px', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5, textAlign: 'center' }}>
-            En créant un compte, vous acceptez nos CGU et notre politique de confidentialité.
+            By creating an account, you agree to our Terms and Privacy Policy.
           </p>
         )}
       </div>

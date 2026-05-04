@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, ChevronDown, Briefcase, Award, BookOpen, MessageCircle, RefreshCw, Star } from 'lucide-react';
 import { supabase } from '../supabaseClient.js';
 import { authFetch } from '../lib/authFetch.js';
+import { describeApiError } from '../lib/apiErrors.js';
+import { useToast } from './Toast.jsx';
+import { useConfirm } from './ConfirmDialog.jsx';
 
 const MAX_CV_MB = 8;
 
@@ -25,13 +28,16 @@ function severityColor(sev) {
 }
 
 const STEP_LABELS = [
-  '🔍 Analyse de votre CV',
-  '🧩 Comparaison avec l\'offre',
-  '📚 Génération de votre parcours',
-  '🎙️ Préparation des questions d\'entretien',
+  '🔍 Analysing your CV',
+  '🧩 Comparing with the job offer',
+  '📚 Building your learning path',
+  '🎙️ Preparing interview questions',
 ];
 
 export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) {
+  const toast = useToast();
+  const confirm = useConfirm();
+
   // stage: list | setup | analyzing | dashboard
   const [stage, setStage] = useState('list');
   const [paths, setPaths] = useState([]);
@@ -47,7 +53,6 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
 
   // analyzing
   const [analyzeStep, setAnalyzeStep] = useState(0);
-  const [errorMsg, setErrorMsg] = useState('');
 
   // dashboard
   const [openDay, setOpenDay] = useState(null);
@@ -97,17 +102,26 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
       setOpenDay(null);
     } catch (e) {
       console.error('Failed to load path:', e);
-      setErrorMsg("Impossible d'ouvrir ce parcours.");
+      toast.error("We couldn't open this learning path.");
     }
   };
 
   const deletePath = async (id) => {
-    if (!window.confirm('Supprimer ce parcours définitivement ?')) return;
+    const ok = await confirm({
+      title: 'Delete this learning path?',
+      message: 'This action cannot be undone.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await supabase.from('job_paths').delete().eq('id', id);
       setPaths(prev => prev.filter(p => p.id !== id));
+      toast.success('Learning path deleted.');
     } catch (e) {
       console.error('Delete failed:', e);
+      toast.error("We couldn't delete this learning path.");
     }
   };
 
@@ -115,20 +129,19 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
     setCvError('');
     if (!file) return setCvFile(null);
     if (file.type !== 'application/pdf') {
-      setCvError('Seuls les fichiers PDF sont acceptés.');
+      setCvError('Only PDF files are accepted.');
       return;
     }
     if (file.size > MAX_CV_MB * 1024 * 1024) {
-      setCvError(`Fichier trop volumineux (max ${MAX_CV_MB} MB).`);
+      setCvError(`File too large (max ${MAX_CV_MB} MB).`);
       return;
     }
     setCvFile(file);
   };
 
   const startAnalysis = async () => {
-    setErrorMsg('');
     if (!jobTitle.trim() || !companyName.trim() || offerText.trim().length < 50) {
-      setErrorMsg("Renseignez le poste, l'entreprise et collez le texte de l'offre (au moins 50 caractères).");
+      toast.error("Please fill in the role, the company and paste the job offer (at least 50 characters).");
       return;
     }
 
@@ -205,11 +218,7 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
       }
       console.error('Job analysis failed:', e);
       setStage('setup');
-      if (e.message === 'RATE_LIMIT') {
-        setErrorMsg('Trop de requêtes. Réessayez dans 30-60 secondes.');
-      } else {
-        setErrorMsg("L'analyse a échoué. Vérifiez votre connexion et réessayez.");
-      }
+      toast.error(describeApiError(e));
     }
   };
 
@@ -219,27 +228,27 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
       <div>
         <h1 style={{ marginBottom: '4px' }}>🎯 Job Coach</h1>
         <p style={{ color: 'var(--text-muted)', marginBottom: '24px', fontSize: '0.9rem' }}>
-          Un parcours d'anglais sur-mesure pour chaque offre que vous visez.
+          A tailored English path for every job you’re going after.
         </p>
 
         <button
-          onClick={() => { setStage('setup'); setErrorMsg(''); }}
+          onClick={() => setStage('setup')}
           className="btn btn-primary"
           style={{ width: '100%', padding: '16px', fontSize: '1rem', marginBottom: '20px' }}
         >
-          + Nouveau parcours ciblé
+          + New targeted path
         </button>
 
         <h2 style={{ fontSize: '0.95rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '700', marginBottom: '12px' }}>
-          Vos parcours
+          Your paths
         </h2>
 
         {isFetchingList ? (
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Chargement…</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Loading…</p>
         ) : paths.length === 0 ? (
           <div className="card" style={{ textAlign: 'center', padding: '32px 20px', color: 'var(--text-muted)' }}>
             <Briefcase size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
-            <p style={{ margin: 0, fontSize: '0.9rem' }}>Aucun parcours pour l'instant.<br />Créez le premier !</p>
+            <p style={{ margin: 0, fontSize: '0.9rem' }}>No paths yet.<br />Create your first one!</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -248,12 +257,13 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
                 <button onClick={() => openPath(p.id)} style={{ flex: 1, background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0 }}>
                   <div style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.95rem' }}>{p.job_title}</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                    {p.company_name} · {new Date(p.created_at).toLocaleDateString('fr-FR')}
+                    {p.company_name} · {new Date(p.created_at).toLocaleDateString('en-GB')}
                   </div>
                 </button>
                 <button
                   onClick={() => deletePath(p.id)}
-                  title="Supprimer"
+                  title="Delete"
+                  aria-label="Delete this learning path"
                   style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem', padding: '4px 8px' }}
                 >
                   ×
@@ -263,10 +273,6 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
             ))}
           </div>
         )}
-
-        {errorMsg && (
-          <div style={{ marginTop: '16px', padding: '12px', background: '#FEF2F2', borderLeft: '4px solid #EF4444', borderRadius: '8px', color: '#991B1B', fontSize: '0.9rem' }}>{errorMsg}</div>
-        )}
       </div>
     );
   }
@@ -275,16 +281,16 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
   if (stage === 'setup') {
     return (
       <div>
-        <button onClick={() => setStage('list')} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.9rem', textDecoration: 'underline', marginBottom: '16px' }}>← Retour</button>
+        <button onClick={() => setStage('list')} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.9rem', textDecoration: 'underline', marginBottom: '16px' }}>← Back</button>
 
-        <h1 style={{ marginBottom: '4px' }}>🎯 Nouveau parcours ciblé</h1>
+        <h1 style={{ marginBottom: '4px' }}>🎯 New targeted path</h1>
         <p style={{ color: 'var(--text-muted)', marginBottom: '24px', fontSize: '0.9rem' }}>
-          Importez votre CV, collez l'offre. L'IA crée un programme sur-mesure.
+          Upload your CV and paste the job offer. The AI builds a tailored learning programme.
         </p>
 
         <div className="card" style={{ marginBottom: '14px' }}>
           <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '6px' }}>
-            Poste visé
+            Target role
           </label>
           <input
             type="text"
@@ -297,7 +303,7 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
 
         <div className="card" style={{ marginBottom: '14px' }}>
           <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '6px' }}>
-            Entreprise
+            Company
           </label>
           <input
             type="text"
@@ -310,23 +316,23 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
 
         <div className="card" style={{ marginBottom: '14px' }}>
           <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '6px' }}>
-            Texte de l'offre <span style={{ textTransform: 'none', color: 'var(--primary)' }}>(copier-coller depuis LinkedIn / WTTJ)</span>
+            Job offer text <span style={{ textTransform: 'none', color: 'var(--primary)' }}>(paste from LinkedIn / WTTJ)</span>
           </label>
           <textarea
             value={offerText}
             onChange={e => setOfferText(e.target.value)}
-            placeholder="Collez ici tout le texte de l'offre — missions, compétences requises, stack technique, etc."
+            placeholder="Paste the entire job offer here — responsibilities, requirements, tech stack, etc."
             rows={8}
             style={{ width: '100%', padding: '12px 14px', border: '2px solid var(--border-color)', borderRadius: '10px', fontSize: '0.95rem', boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' }}
           />
           <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '6px' }}>
-            {offerText.length} caractères
+            {offerText.length} characters
           </div>
         </div>
 
         <div className="card" style={{ marginBottom: '14px' }}>
           <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>
-            CV (PDF) <span style={{ textTransform: 'none', color: 'var(--text-muted)', fontWeight: 400 }}>— optionnel mais fortement recommandé</span>
+            CV (PDF) <span style={{ textTransform: 'none', color: 'var(--text-muted)', fontWeight: 400 }}>— optional but strongly recommended</span>
           </label>
           <label
             htmlFor="cv-upload"
@@ -353,15 +359,15 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
                 <div style={{ fontSize: '1.4rem', marginBottom: '4px' }}>📄</div>
                 <div style={{ fontWeight: '700', color: '#065F46' }}>{cvFile.name}</div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                  {(cvFile.size / 1024).toFixed(0)} KB · cliquer pour changer
+                  {(cvFile.size / 1024).toFixed(0)} KB · click to change
                 </div>
               </div>
             ) : (
               <div>
                 <div style={{ fontSize: '1.4rem', marginBottom: '4px' }}>📎</div>
-                <div style={{ fontWeight: '600' }}>Cliquer pour importer votre CV</div>
+                <div style={{ fontWeight: '600' }}>Click to upload your CV</div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                  PDF uniquement, max {MAX_CV_MB} MB
+                  PDF only, max {MAX_CV_MB} MB
                 </div>
               </div>
             )}
@@ -374,16 +380,11 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
           className="btn btn-primary"
           style={{ width: '100%', padding: '16px', fontSize: '1rem' }}
         >
-          🚀 Lancer l'analyse personnalisée
+          🚀 Run personalised analysis
         </button>
 
-        {errorMsg && (
-          <div style={{ marginTop: '12px', padding: '12px', background: '#FEF2F2', borderLeft: '4px solid #EF4444', borderRadius: '8px', color: '#991B1B', fontSize: '0.9rem' }}>{errorMsg}</div>
-        )}
-
         <div style={{ marginTop: '16px', padding: '12px', background: '#EEF2FF', borderRadius: '8px', fontSize: '0.82rem', color: '#3730A3' }}>
-          🔒 Votre CV est analysé puis transmis à Google Gemini uniquement pour la génération.
-          Il n'est pas stocké en clair côté Fluent.
+          🔒 Your CV is sent to Google Gemini for analysis only. We do not store the raw file on Fluent servers.
         </div>
       </div>
     );
@@ -395,8 +396,8 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
       <div style={{ padding: '40px 12px' }}>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div style={{ fontSize: '3.5rem', marginBottom: '12px', animation: 'pulse 2s infinite' }}>🧠</div>
-          <h2 style={{ marginBottom: '6px' }}>Analyse en cours…</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>30 à 60 secondes — l'IA construit votre parcours.</p>
+          <h2 style={{ marginBottom: '6px' }}>Analysing…</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>30 to 60 seconds — the AI is building your path.</p>
         </div>
 
         <div className="card" style={{ padding: '20px' }}>
@@ -442,10 +443,10 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
 
     return (
       <div>
-        <button onClick={() => { setActivePath(null); setStage('list'); }} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.9rem', textDecoration: 'underline', marginBottom: '12px' }}>← Mes parcours</button>
+        <button onClick={() => { setActivePath(null); setStage('list'); }} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.9rem', textDecoration: 'underline', marginBottom: '12px' }}>← My paths</button>
 
         <div style={{ background: 'linear-gradient(135deg, #4F46E5, #7C3AED)', color: 'white', padding: '20px', borderRadius: '16px', marginBottom: '16px' }}>
-          <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.85, marginBottom: '4px' }}>Parcours ciblé</div>
+          <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.85, marginBottom: '4px' }}>Targeted path</div>
           <h1 style={{ margin: 0, fontSize: '1.5rem', color: 'white' }}>{activePath.job_title}</h1>
           <div style={{ fontSize: '0.95rem', opacity: 0.9, marginTop: '2px' }}>{activePath.company_name}</div>
         </div>
@@ -455,13 +456,13 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
           className="btn btn-primary"
           style={{ width: '100%', padding: '16px', fontSize: '1rem', marginBottom: '20px', background: 'linear-gradient(135deg, #F59E0B, #EF4444)' }}
         >
-          🎙️ Lancer la simulation d'entretien ciblée
+          🎙️ Run targeted interview simulation
         </button>
 
         {briefing && (
           <div className="card" style={{ marginBottom: '14px' }}>
             <h2 style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: '700' }}>
-              <Briefcase size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} /> Briefing société
+              <Briefcase size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} /> Company briefing
             </h2>
             <p style={{ margin: 0, fontSize: '0.92rem', lineHeight: 1.6 }}>{briefing}</p>
           </div>
@@ -470,10 +471,10 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
         {cvSummary?.topSkills?.length > 0 && (
           <div className="card" style={{ marginBottom: '14px' }}>
             <h2 style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: '700' }}>
-              📋 Synthèse de votre CV
+              📋 CV summary
             </h2>
             <div style={{ fontSize: '0.9rem', marginBottom: '8px' }}>
-              <strong>{cvSummary.currentRole || '—'}</strong> · {cvSummary.yearsOfExperience || 0} ans d'expérience
+              <strong>{cvSummary.currentRole || '—'}</strong> · {cvSummary.yearsOfExperience || 0} years of experience
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
               {cvSummary.topSkills.map((s, i) => (
@@ -482,7 +483,7 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
             </div>
             {cvSummary.languages?.length > 0 && (
               <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                <strong>Langues :</strong> {cvSummary.languages.join(' · ')}
+                <strong>Languages:</strong> {cvSummary.languages.join(' · ')}
               </div>
             )}
           </div>
@@ -491,7 +492,7 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
         {gaps.length > 0 && (
           <div className="card" style={{ marginBottom: '14px' }}>
             <h2 style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '12px', fontWeight: '700' }}>
-              🧩 Écarts CV / offre
+              🧩 CV vs offer gaps
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {gaps.map((g, i) => (
@@ -507,7 +508,7 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
         {coreVocab.length > 0 && (
           <div className="card" style={{ marginBottom: '14px' }}>
             <h2 style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '12px', fontWeight: '700' }}>
-              <Award size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} /> Vocabulaire core ({coreVocab.length})
+              <Award size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} /> Core vocabulary ({coreVocab.length})
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 10px', fontSize: '0.85rem' }}>
               {visibleVocab.map((v, i) => (
@@ -522,7 +523,7 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
                 onClick={() => setShowAllVocab(s => !s)}
                 style={{ marginTop: '10px', background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.85rem', textDecoration: 'underline' }}
               >
-                {showAllVocab ? 'Réduire' : `Voir les ${coreVocab.length - 10} restants`}
+                {showAllVocab ? 'Show less' : `Show ${coreVocab.length - 10} more`}
               </button>
             )}
           </div>
@@ -531,7 +532,7 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
         {learningPlan.length > 0 && (
           <div style={{ marginBottom: '14px' }}>
             <h2 style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '10px', fontWeight: '700' }}>
-              <BookOpen size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} /> Programme {learningPlan.length} jours
+              <BookOpen size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} /> {learningPlan.length}-day programme
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {learningPlan.map((d) => {
@@ -540,7 +541,7 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
                   <div key={d.day} className="card" style={{ padding: '14px', cursor: 'pointer' }} onClick={() => setOpenDay(isOpen ? null : d.day)}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div>
-                        <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--primary)', fontWeight: '700' }}>Jour {d.day}</div>
+                        <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--primary)', fontWeight: '700' }}>Day {d.day}</div>
                         <div style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--text-main)', marginTop: '2px' }}>{d.title}</div>
                       </div>
                       <ChevronDown size={20} style={{ color: 'var(--text-muted)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
@@ -550,7 +551,7 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
                       <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid var(--border-color)' }} onClick={e => e.stopPropagation()}>
                         {d.vocabulary?.length > 0 && (
                           <div style={{ marginBottom: '14px' }}>
-                            <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: '700', marginBottom: '6px' }}>Vocabulaire ({d.vocabulary.length})</div>
+                            <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: '700', marginBottom: '6px' }}>Vocabulary ({d.vocabulary.length})</div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                               {d.vocabulary.map((v, i) => (
                                 <div key={i} style={{ padding: '8px 10px', background: '#F8FAFC', borderRadius: '6px' }}>
@@ -565,7 +566,7 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
 
                         {d.grammarFocus && (
                           <div style={{ marginBottom: '14px', padding: '10px 12px', background: '#FFFBEB', borderLeft: '3px solid #F59E0B', borderRadius: '6px' }}>
-                            <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: '#92400E', fontWeight: '700', marginBottom: '4px' }}>Grammaire</div>
+                            <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: '#92400E', fontWeight: '700', marginBottom: '4px' }}>Grammar</div>
                             <div style={{ fontWeight: '700' }}>{d.grammarFocus.title}</div>
                             <div style={{ fontSize: '0.85rem', color: 'var(--text-main)', marginTop: '4px' }}>{d.grammarFocus.explanation}</div>
                             <div style={{ fontSize: '0.85rem', fontStyle: 'italic', marginTop: '4px' }}>{d.grammarFocus.example}</div>
@@ -576,7 +577,7 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
                         {d.keyExpression && (
                           <div style={{ marginBottom: '14px', padding: '10px 12px', background: '#ECFDF5', borderLeft: '3px solid #10B981', borderRadius: '6px' }}>
                             <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: '#065F46', fontWeight: '700', marginBottom: '4px' }}>
-                              <Star size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Expression clé
+                              <Star size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Key expression
                             </div>
                             <div style={{ fontWeight: '700' }}>{d.keyExpression.phrase}</div>
                             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{d.keyExpression.meaning}</div>
@@ -613,7 +614,7 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
         {interviewQs.length > 0 && (
           <div className="card" style={{ marginBottom: '14px' }}>
             <h2 style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '12px', fontWeight: '700' }}>
-              🎙️ Questions probables ({interviewQs.length})
+              🎙️ Likely interview questions ({interviewQs.length})
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {interviewQs.map((q, i) => (
@@ -622,8 +623,8 @@ export function JobCoachView({ session, userLevel, onLaunchTargetedInterview }) 
                     <span style={{ fontSize: '0.7rem', background: 'var(--primary)', color: 'white', padding: '2px 8px', borderRadius: '8px', fontWeight: '700' }}>{q.category}</span>
                   </div>
                   <div style={{ fontWeight: '600', fontSize: '0.92rem' }}>{q.question}</div>
-                  {q.whyAsked && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}><em>Pourquoi :</em> {q.whyAsked}</div>}
-                  {q.hint && <div style={{ fontSize: '0.78rem', color: '#3730A3', marginTop: '2px' }}><em>💡 Piste :</em> {q.hint}</div>}
+                  {q.whyAsked && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}><em>Why:</em> {q.whyAsked}</div>}
+                  {q.hint && <div style={{ fontSize: '0.78rem', color: '#3730A3', marginTop: '2px' }}><em>💡 Hint:</em> {q.hint}</div>}
                 </div>
               ))}
             </div>

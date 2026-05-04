@@ -4,9 +4,9 @@ import { TERMS_MARKDOWN } from '../legal/terms.js';
 import { LEGAL_NOTICE_MARKDOWN } from '../legal/legalNotice.js';
 
 const DOCS = {
-  privacy: { title: 'Politique de confidentialité', md: PRIVACY_POLICY_MARKDOWN },
-  terms: { title: "Conditions Générales d'Utilisation", md: TERMS_MARKDOWN },
-  legal: { title: 'Mentions légales', md: LEGAL_NOTICE_MARKDOWN },
+  privacy: { title: 'Privacy Policy', md: PRIVACY_POLICY_MARKDOWN },
+  terms: { title: 'Terms of Service', md: TERMS_MARKDOWN },
+  legal: { title: 'Legal Notice', md: LEGAL_NOTICE_MARKDOWN },
 };
 
 // Very small markdown -> HTML renderer (headings, bold, lists, paragraphs).
@@ -125,7 +125,7 @@ export function LegalDocModal({ docKey, onClose }) {
           <button
             onClick={onClose}
             style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px 8px' }}
-            aria-label="Fermer"
+            aria-label="Close"
           >
             ×
           </button>
@@ -156,11 +156,11 @@ export function LegalFooter() {
         marginTop: '32px',
       }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 8px' }}>
-          <button style={linkStyle} onClick={() => setOpen('legal')}>Mentions légales</button>
+          <button style={linkStyle} onClick={() => setOpen('legal')}>Legal notice</button>
           <span aria-hidden>·</span>
-          <button style={linkStyle} onClick={() => setOpen('privacy')}>Confidentialité</button>
+          <button style={linkStyle} onClick={() => setOpen('privacy')}>Privacy</button>
           <span aria-hidden>·</span>
-          <button style={linkStyle} onClick={() => setOpen('terms')}>CGU</button>
+          <button style={linkStyle} onClick={() => setOpen('terms')}>Terms</button>
         </div>
         <div style={{ marginTop: '6px', opacity: 0.7 }}>
           © {new Date().getFullYear()} Fluent
